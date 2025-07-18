@@ -1,24 +1,32 @@
 'use client';
 import { useState, useEffect } from 'react';
-
+import "./globals.css";
 
 type Detection = {
-  box: number[];
-  confidence: number;
-  class_id: number;
-  crop_path: string;
+  plate_string: string;
+  plate_confidence: number;
+  plate_crop_path: string;
+  characters: {
+    box: number[];
+    class_id: number;
+    confidence: number;
+  }[];
 };
 
 type Result = {
   filename: string;
   annotated_image: string;
   detections: Detection[];
+  timestamp?: string;
 };
+
+const charMap = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
 export default function Home() {
   const [file, setFile] = useState<File | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [history, setHistory] = useState<Result[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
 
   const uploadFile = async () => {
     if (!file) return;
@@ -37,97 +45,153 @@ export default function Home() {
       }
 
       const data = await res.json();
-      console.log('✅ Upload result:', data);
       setResult(data);
     } catch (err) {
       console.error('❌ Upload failed:', err);
       alert(`Upload failed: ${err}`);
     }
-
   };
 
   useEffect(() => {
-      const fetchHistory = async () => {
-        const res = await fetch('http://192.168.50.143:8000/history');
-        const data = await res.json();
-        setHistory(data);
-      };
+  const fetchFiltered = async () => {
+    const query = new URLSearchParams();
+    if (searchTerm) {
+      query.append("plate_query", searchTerm);
+      query.append("filename_query", searchTerm);
+    }
 
-      fetchHistory();
-    }, []);
+    const res = await fetch(`http://192.168.50.143:8000/search?${query}`);
+    const data = await res.json();
+    setHistory(data);
+  };
+
+  fetchFiltered();
+}, [searchTerm]);
+
 
   return (
-    <main className="p-4">
-      <h1 className="text-xl font-bold mb-4">🚗 Traffic Intelligence Hub</h1>
+    <main className="min-h-screen flex flex-col md:flex-row bg-[#213448] text-white font-sans">
+      {/* Sidebar */}
+      <aside className="md:w-1/4 bg-[#547792] p-4 flex flex-col space-y-4">
+        <h1 className="text-2xl font-bold">🚗 Traffic Intelligence Hub</h1>
 
-      <input
-        type="file"
-        onChange={(e) => setFile(e.target.files?.[0] || null)}
-      />
-      <button
-        onClick={uploadFile}
-        className="bg-blue-500 text-white px-4 py-2 mt-2 rounded"
-      >
-        Upload Dataset
-      </button>
-
-      {result && (
-        <div className="mt-6">
-          <h2 className="text-lg font-semibold">✅ Detection Results</h2>
-
-          <p className="text-sm mt-1 text-gray-500">{result.filename}</p>
-
-          {/* Annotated Image */}
-          <div className="my-4">
-            <h3 className="font-medium mb-2">Annotated Image</h3>
-            <img
-              src={`http://192.168.50.143:8000${result.annotated_image}`}
-              alt="Annotated"
-              className="max-w-md border"
-            />
+        {/* Upload Section */}
+        <div className="flex flex-col space-y-2">
+          <div className="flex items-center space-x-2">
+            <label className="bg-[#94B4C1] text-[#213448] font-semibold text-sm px-3 py-1.5 rounded cursor-pointer">
+              Choose File
+              <input
+                type="file"
+                onChange={(e) => setFile(e.target.files?.[0] || null)}
+                style={{ display: 'none' }}
+                id="fileInput"
+              />
+            </label>
+            {file && (
+              <span className="text-sm text-[#ECEFCA] truncate max-w-[10rem]">
+                {file.name}
+              </span>
+            )}
           </div>
+          <button
+            onClick={async () => {
+              await uploadFile();
+              setFile(null); // Clear file state
+              const inputEl = document.getElementById("fileInput") as HTMLInputElement;
+              if (inputEl) inputEl.value = ""; // Reset actual input
+            }}
+            className="bg-[#ECEFCA] text-[#213448] px-4 py-2 rounded font-semibold text-sm"
+          >
+            Upload Image
+          </button>
+        </div>
 
-          {/* Cropped Plates */}
-          <div className="my-4">
-            <h3 className="font-medium mb-2">Detected Plates</h3>
-            <div className="grid grid-cols-2 gap-4">
-              {Array.isArray(result.detections) && result.detections.length > 0 ? (
-                result.detections.map((detection, idx) => (
-                  <div key={idx} className="text-sm">
+        {/* Search + History */}
+        <div className="flex flex-col mt-4">
+          <input
+            type="text"
+            placeholder="Search by filename or plate..."
+            className="w-full p-2 mb-3 rounded bg-[#ECEFCA] text-[#213448]"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+
+          {history.length > 0 ? (
+            <>
+              <h2 className="text-lg font-semibold mb-2">📜 Upload History</h2>
+              <ul className="space-y-2 overflow-y-auto max-h-[60vh] pr-2">
+                {history.map((h, idx) => (
+                  <li
+                    key={idx}
+                    className="flex items-center space-x-2 bg-[#94B4C1] p-2 rounded cursor-pointer"
+                    onClick={() => setResult(h)}
+                  >
                     <img
-                      src={`http://192.168.50.143:8000/${detection.crop_path}`}
-                      alt={`Plate ${idx}`}
-                      className="w-48 border mb-1"
+                      src={`http://192.168.50.143:8000${h.annotated_image}`}
+                      alt="thumb"
+                      className="w-12 h-12 object-cover rounded-sm border"
                     />
-                    <p>Confidence: {(detection.confidence * 100).toFixed(1)}%</p>
-                  </div>
-                ))
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-[#213448]">{h.filename}</p>
+                      <p className="text-xs text-[#21344880]">
+                        {h.timestamp?.slice(0, 19).replace("T", " ")}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <p className="text-sm mt-2 text-[#ECEFCA]">No history yet.</p>
+          )}
+        </div>
+      </aside>
+
+      {/* Main Viewer */}
+      <section className="md:flex-1 p-6 overflow-y-auto">
+        {result ? (
+          <>
+            <h2 className="text-xl font-semibold mb-2 text-[#ECEFCA]">✅ Detection Results</h2>
+            <p className="text-sm text-gray-300 mb-4">{result.filename}</p>
+
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold mb-2 text-[#94B4C1]">Annotated Image</h3>
+              <img
+                src={`http://192.168.50.143:8000${result.annotated_image}`}
+                alt="Annotated"
+                className="w-full max-w-4xl border-4 border-[#94B4C1] rounded-md"
+              />
+            </div>
+
+            <div>
+              <h3 className="text-lg font-semibold mb-2 text-[#94B4C1]">Detected Plates</h3>
+              {result.detections.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {result.detections.map((detection, idx) => (
+                    <div key={idx} className="bg-[#547792] p-3 rounded border border-[#ECEFCA] text-sm">
+                      <img
+                        src={`http://192.168.50.143:8000${detection.plate_crop_path}`}
+                        alt={`Plate ${idx}`}
+                        className="w-full mb-2 border rounded"
+                      />
+                      <p><strong>Plate:</strong> {detection.plate_string || 'N/A'}</p>
+                      <p><strong>Confidence:</strong> {detection.plate_confidence ? `${(detection.plate_confidence * 100).toFixed(2)}%` : 'N/A'}</p>
+                      <p>
+                        <strong>Characters:</strong>{" "}
+                        {detection.characters?.map(c => charMap[c.class_id] || "?").join('') || "N/A"}
+                      </p>
+                    </div>
+                  ))}
+                </div>
               ) : (
                 <p>No plates detected.</p>
               )}
             </div>
-          </div>
-          {history.length > 0 && (
-            <div className="mt-8">
-              <h2 className="text-lg font-semibold">📜 Upload History</h2>
-              <ul className="mt-2 space-y-2">
-                {history.map((h, idx) => (
-                  <li key={idx} className="border p-2 rounded">
-                    <p className="text-sm font-medium">{h.filename}</p>
-                    <p className="text-xs text-gray-500">{h.timestamp}</p>
-                    <button
-                      onClick={() => setResult(h)}
-                      className="text-blue-500 underline text-sm"
-                    >
-                      View Result
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
+          </>
+        ) : (
+          <p className="text-gray-400">Upload an image to begin.</p>
+        )}
+      </section>
     </main>
   );
 }

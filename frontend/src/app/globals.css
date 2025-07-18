@@ -24,3 +24,13 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+.custom-upload-button {
+  background-color: #94B4C1;
+  color: #213448;
+  font-weight: bold;
+  padding: 10px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-block;
+}
