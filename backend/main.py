@@ -1,14 +1,16 @@
-from fastapi import FastAPI, UploadFile, File, Query
+from fastapi import FastAPI, UploadFile, File, Query, Path
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import JSONResponse, FileResponse
 from sqlmodel import SQLModel, create_engine, Session, select
 from models import DetectionRecord, PlateInfo, CharacterBox
 from datetime import datetime
 import shutil, os, io
+from typing import List
 import zipfile
 import tempfile
 import json
+
 
 from models import DetectionRecord, PlateInfo, CharacterBox
 from utils import save_detection_to_db
@@ -33,21 +35,31 @@ engine = create_engine("sqlite:///detections.db")
 SQLModel.metadata.create_all(engine)
 
 @app.post("/upload")
-async def upload(file: UploadFile = File(...)):
-    file_path = os.path.join(UPLOAD_DIR, file.filename)
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+async def upload(files: List[UploadFile] = File(...)):
+    responses = []
 
-    result = detect_plates_and_characters(file_path)
-    with Session(engine) as session:
-        record = save_detection_to_db(session, file.filename, result)
+    for file in files:
+        file_path = os.path.join(UPLOAD_DIR, file.filename)
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
 
-        return {
-            "filename": record.filename,
-            "timestamp": record.timestamp,
-            "annotated_image": record.annotated_image,
-            "detections": result["detections"]
-        }
+        result = detect_plates_and_characters(file_path)
+
+        with Session(engine) as session:
+            record = save_detection_to_db(session, file.filename, result)
+
+            # Read values while session is open
+            response = {
+                "filename": record.filename,
+                "timestamp": record.timestamp,
+                "annotated_image": record.annotated_image,
+                "detections": result["detections"]
+            }
+
+        responses.append(response)
+
+    return responses
+
 
 @app.get("/history")
 def get_history():
@@ -72,6 +84,38 @@ def search(plate_query: str = Query(None), filename_query: str = Query(None)):
         results = session.exec(query.order_by(DetectionRecord.id.desc())).all()
         return results
 
+@app.get("/result/{detection_id}")
+def get_full_result(detection_id: int = Path(...)):
+    with Session(engine) as session:
+        record = session.get(DetectionRecord, detection_id)
+        if not record:
+            raise HTTPException(status_code=404, detail="Detection not found.")
+
+        plates = session.exec(select(PlateInfo).where(PlateInfo.detection_id == detection_id)).all()
+        char_map = {}
+        for c in session.exec(select(CharacterBox).where(CharacterBox.detection_id == detection_id)).all():
+            char_map.setdefault(c.detection_id, []).append({
+                "box": [c.x1, c.y1, c.x2, c.y2],
+                "class_id": c.class_id,
+                "confidence": c.confidence,
+            })
+
+        detections = []
+        for p in plates:
+            detections.append({
+                "plate_string": p.plate_string,
+                "plate_confidence": p.plate_confidence,
+                "plate_crop_path": p.plate_crop_path,
+                "characters": char_map.get(p.detection_id, [])
+            })
+
+        return JSONResponse({
+            "filename": record.filename,
+            "timestamp": record.timestamp,
+            "annotated_image": record.annotated_image,
+            "detections": detections
+        })
+      
 @app.get("/download/{filename}")
 def download_file(filename: str):
     file_path = os.path.join("runs", "results", filename)
@@ -121,3 +165,4 @@ def download_all_results(
 
     zip_filename = f"all_results_{datetime.now().strftime('%Y%m%d-%H%M%S')}.zip"
     return FileResponse(tmp_zip.name, media_type="application/zip", filename=zip_filename)
+

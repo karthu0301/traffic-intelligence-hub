@@ -14,25 +14,28 @@ type Detection = {
 };
 
 type Result = {
+  id: number;
   filename: string;
   annotated_image: string;
-  detections: Detection[];
+  detections?: Detection[];
   timestamp?: string;
 };
 
 const charMap = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
 export default function Home() {
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [result, setResult] = useState<Result | null>(null);
   const [history, setHistory] = useState<Result[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const uploadFile = async () => {
-    if (!file) return;
+  const uploadFiles = async () => {
+    if (files.length === 0) return;
 
     const formData = new FormData();
-    formData.append('file', file);
+    for (let file of files) {
+      formData.append('files', file);
+    }
 
     try {
       const res = await fetch('http://192.168.50.143:8000/upload', {
@@ -40,34 +43,48 @@ export default function Home() {
         body: formData,
       });
 
-      if (!res.ok) {
-        throw new Error(`Failed to upload. Status: ${res.status}`);
-      }
+      if (!res.ok) throw new Error(`Failed to upload. Status: ${res.status}`);
 
-      const data = await res.json();
-      setResult(data);
+      const data: Result[] = await res.json();
+
+      const detailedResult = await fetch(`http://192.168.50.143:8000/result/${data[0].id}`);
+      const fullResult = await detailedResult.json();
+
+      setResult(fullResult);
+      setFiles([]);
+      setHistory((prev) => [...data, ...prev]);
     } catch (err) {
       console.error('❌ Upload failed:', err);
       alert(`Upload failed: ${err}`);
     }
   };
 
-  useEffect(() => {
-  const fetchFiltered = async () => {
-    const query = new URLSearchParams();
-    if (searchTerm) {
-      query.append("plate_query", searchTerm);
-      query.append("filename_query", searchTerm);
+  const fetchFullResult = async (id: number) => {
+    try {
+      const res = await fetch(`http://192.168.50.143:8000/result/${id}`);
+      if (!res.ok) throw new Error("Failed to fetch result");
+      const full = await res.json();
+      setResult(full);
+    } catch (err) {
+      console.error("Failed to fetch full result:", err);
     }
-
-    const res = await fetch(`http://192.168.50.143:8000/search?${query}`);
-    const data = await res.json();
-    setHistory(data);
   };
 
-  fetchFiltered();
-}, [searchTerm]);
+  useEffect(() => {
+    const fetchFiltered = async () => {
+      const query = new URLSearchParams();
+      if (searchTerm) {
+        query.append("plate_query", searchTerm);
+        query.append("filename_query", searchTerm);
+      }
 
+      const res = await fetch(`http://192.168.50.143:8000/search?${query}`);
+      const data = await res.json();
+      setHistory(data);
+    };
+
+    fetchFiltered();
+  }, [searchTerm]);
 
   return (
     <main className="min-h-screen flex flex-col md:flex-row bg-[#213448] text-white font-sans">
@@ -79,30 +96,25 @@ export default function Home() {
         <div className="flex flex-col space-y-2">
           <div className="flex items-center space-x-2">
             <label className="bg-[#94B4C1] text-[#213448] font-semibold text-sm px-3 py-1.5 rounded cursor-pointer">
-              Choose File
+              Choose File(s)
               <input
                 type="file"
-                onChange={(e) => setFile(e.target.files?.[0] || null)}
+                multiple
+                onChange={(e) => setFiles(Array.from(e.target.files || []))}
                 style={{ display: 'none' }}
-                id="fileInput"
               />
             </label>
-            {file && (
-              <span className="text-sm text-[#ECEFCA] truncate max-w-[10rem]">
-                {file.name}
-              </span>
+            {files.length > 0 && (
+              <p className="text-xs text-gray-300 mt-2">
+                {files.map(f => f.name).join(', ')}
+              </p>
             )}
           </div>
           <button
-            onClick={async () => {
-              await uploadFile();
-              setFile(null); // Clear file state
-              const inputEl = document.getElementById("fileInput") as HTMLInputElement;
-              if (inputEl) inputEl.value = ""; // Reset actual input
-            }}
+            onClick={uploadFiles}
             className="bg-[#ECEFCA] text-[#213448] px-4 py-2 rounded font-semibold text-sm"
           >
-            Upload Image
+            Upload Image(s)
           </button>
         </div>
 
@@ -131,7 +143,7 @@ export default function Home() {
                   <li
                     key={idx}
                     className="flex items-center space-x-2 bg-[#94B4C1] p-2 rounded cursor-pointer"
-                    onClick={() => setResult(h)}
+                    onClick={() => fetchFullResult(h.id)}
                   >
                     <img
                       src={`http://192.168.50.143:8000${h.annotated_image}`}
@@ -179,7 +191,7 @@ export default function Home() {
 
             <div>
               <h3 className="text-lg font-semibold mb-2 text-[#94B4C1]">Detected Plates</h3>
-              {result.detections.length > 0 ? (
+              {result.detections && result.detections.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {result.detections.map((detection, idx) => (
                     <div key={idx} className="bg-[#547792] p-3 rounded border border-[#ECEFCA] text-sm">
