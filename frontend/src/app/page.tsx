@@ -131,6 +131,13 @@ export default function Home() {
           {history.length > 0 ? (
             <>
               <h2 className="text-lg font-semibold mb-2">📜 Upload History</h2>
+              <a
+                href={`http://192.168.50.143:8000/download-all?plate_query=${searchTerm}&filename_query=${searchTerm}`}
+                download
+                className="text-sm text-blue-200 underline block mt-2"
+              >
+                ⬇ Download Results (ZIP)
+              </a>
               <ul className="space-y-2 overflow-y-auto max-h-[60vh] pr-2">
                 {history.map((h, idx) => (
                   <li
@@ -173,6 +180,13 @@ export default function Home() {
                 alt="Annotated"
                 className="w-full max-w-4xl border-4 border-[#94B4C1] rounded-md"
               />
+              <a
+                href={`http://192.168.50.143:8000${result.annotated_image}`}
+                download
+                className="text-blue-200 underline text-sm"
+              >
+                ⬇ Download Annotated Image
+              </a>
             </div>
 
             <div>
@@ -192,6 +206,13 @@ export default function Home() {
                         <strong>Characters:</strong>{" "}
                         {detection.characters?.map(c => charMap[c.class_id] || "?").join('') || "N/A"}
                       </p>
+                      <a
+                        href={`http://192.168.50.143:8000${detection.plate_crop_path}`}
+                        download
+                        className="text-blue-200 underline text-xs"
+                      >
+                        ⬇ Download Crop
+                      </a>
                     </div>
                   ))}
                 </div>
