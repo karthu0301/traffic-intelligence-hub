@@ -1,7 +1,9 @@
 from fastapi import FastAPI, UploadFile, File
 import shutil, os
 from fastapi.middleware.cors import CORSMiddleware
-from yolo_processor import detect_plates
+from yolo_processor import detect_plates_and_characters
+from fastapi.staticfiles import StaticFiles
+from datetime import datetime
 
 app = FastAPI()
 
@@ -12,6 +14,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.mount("/static", StaticFiles(directory="runs"), name="static")
+
+history = []
 
 UPLOAD_DIR = "../data/"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -24,10 +30,18 @@ async def upload(file: UploadFile = File(...)):
         shutil.copyfileobj(file.file, buffer)
 
     # Run YOLO detection
-    result = detect_plates(file_path)
+    result = detect_plates_and_characters(file_path)
     
-    return {
+    record = {
         "filename": file.filename,
+        "timestamp": datetime.now().isoformat(),
         "annotated_image": result["annotated_image"],
         "detections": result["detections"]
     }
+
+    history.append(record)
+    return record
+
+@app.get("/history")
+def get_history():
+    return history
