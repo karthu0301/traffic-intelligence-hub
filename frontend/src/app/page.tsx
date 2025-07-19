@@ -249,6 +249,16 @@ useEffect(() => {
           <p className="text-gray-400">Upload an image to begin.</p>
         )}
       </section>
+      <aside className="md:w-1/4 bg-[#1B2C3E] p-6 border-l border-[#ECEFCA]">
+        {accuracyTrends.length > 0 && (
+          <div className="mt-10">
+            <h3 className="text-lg font-semibold mb-4 text-[#94B4C1]">📈 Detection Accuracy Trends</h3>
+            <div className="bg-[#547792] p-4 rounded-lg border border-[#ECEFCA]">
+              <Line data={trendData} options={trendOptions} />
+            </div>
+          </div>
+        )}
+      </aside>
     </main>
   );
 }
