@@ -27,6 +27,8 @@ export default function Home() {
   const [result, setResult] = useState<Result | null>(null);
   const [history, setHistory] = useState<Result[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState("timestamp");
+  const [order, setOrder] = useState("desc");
 
   const uploadFile = async () => {
     if (!file) return;
@@ -59,6 +61,8 @@ export default function Home() {
       query.append("plate_query", searchTerm);
       query.append("filename_query", searchTerm);
     }
+    query.append("sort_by", sortBy);
+    query.append("order", order);
 
     const res = await fetch(`http://192.168.50.143:8000/search?${query}`);
     const data = await res.json();
@@ -66,7 +70,7 @@ export default function Home() {
   };
 
   fetchFiltered();
-}, [searchTerm]);
+}, [searchTerm, sortBy, order]);
 
 
   return (
@@ -115,7 +119,24 @@ export default function Home() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
-
+          <div className="flex space-x-2 mb-2">
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="text-[#213448] text-sm rounded p-1"
+            >
+              <option value="timestamp">Sort by Timestamp</option>
+              <option value="filename">Sort by Filename</option>
+            </select>
+            <select
+              value={order}
+              onChange={(e) => setOrder(e.target.value)}
+              className="text-[#213448] text-sm rounded p-1"
+            >
+              <option value="desc">Descending</option>
+              <option value="asc">Ascending</option>
+            </select>
+          </div>
           {history.length > 0 ? (
             <>
               <h2 className="text-lg font-semibold mb-2">📜 Upload History</h2>
