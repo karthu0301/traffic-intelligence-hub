@@ -1,7 +1,8 @@
-from fastapi import FastAPI, UploadFile, File, Query
+from fastapi import FastAPI, UploadFile, File, Query, APIRouter
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import SQLModel, create_engine, Session, select
+from collections import Counter
 from datetime import datetime
 import shutil, os
 
@@ -66,3 +67,10 @@ def search(plate_query: str = Query(None), filename_query: str = Query(None)):
 
         results = session.exec(query.order_by(DetectionRecord.id.desc())).all()
         return results
+
+@app.get("/plate-frequency")
+def plate_frequency():
+    with Session(engine) as session:
+        plates = session.exec(select(PlateInfo.plate_string)).all()
+        counter = Counter(plates)
+        return [{"plate": plate, "count": count} for plate, count in counter.items()]
