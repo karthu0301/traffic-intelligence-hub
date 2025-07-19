@@ -51,7 +51,12 @@ def get_history():
         return records
 
 @app.get("/search")
-def search(plate_query: str = Query(None), filename_query: str = Query(None)):
+def search(
+    plate_query: str = Query(None),
+    filename_query: str = Query(None),
+    limit: int = Query(10),
+    offset: int = Query(0)
+):
     with Session(engine) as session:
         query = select(DetectionRecord)
 
@@ -64,5 +69,11 @@ def search(plate_query: str = Query(None), filename_query: str = Query(None)):
             ).all()
             query = query.where(DetectionRecord.id.in_(detection_ids))
 
-        results = session.exec(query.order_by(DetectionRecord.id.desc())).all()
-        return results
+        all_results = session.exec(query).all()
+        total = len(all_results)
+        results = all_results[offset : offset + limit]
+
+        return {
+            "results": results,
+            "total": total
+        }

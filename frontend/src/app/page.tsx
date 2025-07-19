@@ -27,6 +27,10 @@ export default function Home() {
   const [result, setResult] = useState<Result | null>(null);
   const [history, setHistory] = useState<Result[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5); 
+  const [totalResults, setTotalResults] = useState(0);
+
 
   const uploadFile = async () => {
     if (!file) return;
@@ -53,20 +57,22 @@ export default function Home() {
   };
 
   useEffect(() => {
-  const fetchFiltered = async () => {
+    const fetchFiltered = async () => {
     const query = new URLSearchParams();
     if (searchTerm) {
       query.append("plate_query", searchTerm);
       query.append("filename_query", searchTerm);
     }
+    query.append("limit", pageSize.toString());
+    query.append("offset", ((currentPage - 1) * pageSize).toString());
 
     const res = await fetch(`http://192.168.50.143:8000/search?${query}`);
     const data = await res.json();
-    setHistory(data);
+    setHistory(data.results);
+    setTotalResults(data.total);
   };
-
   fetchFiltered();
-}, [searchTerm]);
+}, [searchTerm, currentPage]);
 
 
   return (
@@ -145,8 +151,27 @@ export default function Home() {
             <p className="text-sm mt-2 text-[#ECEFCA]">No history yet.</p>
           )}
         </div>
+        <div className="flex items-center justify-between mt-4 text-sm">
+        <button
+          onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+          disabled={currentPage === 1}
+          className="px-3 py-1 rounded bg-[#ECEFCA] text-[#213448] disabled:opacity-50"
+        >
+          ⬅ Prev
+        </button>
+        <span>
+          Page {currentPage} of {Math.ceil(totalResults / pageSize)}
+        </span>
+        <button
+          onClick={() => setCurrentPage((p) => p + 1)}
+          disabled={currentPage >= Math.ceil(totalResults / pageSize)}
+          className="px-3 py-1 rounded bg-[#ECEFCA] text-[#213448] disabled:opacity-50"
+        >
+          Next ➡
+        </button>
+      </div>
       </aside>
-
+      
       {/* Main Viewer */}
       <section className="md:flex-1 p-6 overflow-y-auto">
         {result ? (
