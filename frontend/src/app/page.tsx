@@ -86,6 +86,26 @@ export default function Home() {
     fetchFiltered();
   }, [searchTerm]);
 
+  const deleteRecord = async (id: number) => {
+  const confirmed = confirm("Are you sure you want to delete this upload?");
+  if (!confirmed) return;
+
+  try {
+    const res = await fetch(`http://192.168.50.143:8000/delete/${id}`, {
+      method: 'DELETE'
+    });
+
+    if (!res.ok) throw new Error(`Failed to delete. Status: ${res.status}`);
+
+    setHistory(prev => prev.filter(r => r.id !== id));
+    if (result?.id === id) setResult(null);
+  } catch (err) {
+    console.error("❌ Failed to delete:", err);
+    alert("Failed to delete. Try again.");
+  }
+};
+
+
   return (
     <main className="min-h-screen flex flex-col md:flex-row bg-[#213448] text-white font-sans">
       {/* Sidebar */}
@@ -151,11 +171,32 @@ export default function Home() {
                       className="w-12 h-12 object-cover rounded-sm border"
                     />
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-[#213448]">{h.filename}</p>
-                      <p className="text-xs text-[#21344880]">
-                        {h.timestamp?.slice(0, 19).replace("T", " ")}
-                      </p>
-                    </div>
+                        <p className="text-sm font-medium text-[#213448]">{h.filename}</p>
+                        <p className="text-xs text-[#21344880]">
+                          {h.timestamp?.slice(0, 19).replace("T", " ")}
+                        </p>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteRecord(h.id);
+                        }}
+                        className="text-[#992222] hover:text-[#cc4444] cursor-pointer text-lg"
+                        title="Delete"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-5 w-5"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M6 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 112 0v6a1 1 0 11-2 0V8zM4 5a1 1 0 011-1h10a1 1 0 011 1v1H4V5zm2-3a1 1 0 00-1 1v1h10V3a1 1 0 00-1-1H6z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      </button>
                   </li>
                 ))}
               </ul>
