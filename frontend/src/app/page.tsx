@@ -1,6 +1,29 @@
 'use client';
 import { useState, useEffect } from 'react';
 import "./globals.css";
+import { Line } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  BarElement
+} from 'chart.js';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend
+);
 
 type Detection = {
   plate_string: string;
@@ -27,6 +50,32 @@ export default function Home() {
   const [result, setResult] = useState<Result | null>(null);
   const [history, setHistory] = useState<Result[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [accuracyTrends, setAccuracyTrends] = useState<{ date: string; avg_confidence: number }[]>([]);
+
+  const trendData = {
+  labels: accuracyTrends.map((t) => t.date),
+  datasets: [
+    {
+      label: 'Avg Detection Confidence',
+      data: accuracyTrends.map((t) => t.avg_confidence),
+      borderColor: '#94B4C1',
+      backgroundColor: 'rgba(148, 180, 193, 0.2)',
+      tension: 0.3,
+      fill: true
+    }
+  ]
+};
+
+const trendOptions = {
+  responsive: true,
+  plugins: {
+    legend: { display: true },
+    title: {
+      display: true,
+      text: 'Detection Accuracy Trends'
+    }
+  }
+};
 
   const uploadFile = async () => {
     if (!file) return;
@@ -68,6 +117,14 @@ export default function Home() {
   fetchFiltered();
 }, [searchTerm]);
 
+useEffect(() => {
+  const fetchTrends = async () => {
+    const res = await fetch("http://192.168.50.143:8000/detection-accuracy-trends");
+    const data = await res.json();
+    setAccuracyTrends(data);
+  };
+  fetchTrends();
+}, []);
 
   return (
     <main className="min-h-screen flex flex-col md:flex-row bg-[#213448] text-white font-sans">

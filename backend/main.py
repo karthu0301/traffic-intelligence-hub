@@ -1,7 +1,9 @@
-from fastapi import FastAPI, UploadFile, File, Query
+from fastapi import FastAPI, UploadFile, File, Query, APIRouter
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from sqlmodel import SQLModel, create_engine, Session, select
+from fastapi.responses import JSONResponse
+from sqlmodel import SQLModel, create_engine, Session, select, func
+from collections import defaultdict
 from datetime import datetime
 import shutil, os
 
@@ -66,3 +68,23 @@ def search(plate_query: str = Query(None), filename_query: str = Query(None)):
 
         results = session.exec(query.order_by(DetectionRecord.id.desc())).all()
         return results
+
+
+@app.get("/detection-accuracy-trends")
+def detection_accuracy_trends():
+    with Session(engine) as session:
+        records = session.exec(select(PlateInfo, DetectionRecord).join(DetectionRecord, PlateInfo.detection_id == DetectionRecord.id)).all()
+
+        trends = defaultdict(list)
+        for plate, record in records:
+            day = record.timestamp.split("T")[0]
+            trends[day].append(plate.plate_confidence)
+
+        result = [
+            {
+                "date": date,
+                "avg_confidence": round(sum(confs) / len(confs), 4)
+            }
+            for date, confs in sorted(trends.items())
+        ]
+        return JSONResponse(content=result)
