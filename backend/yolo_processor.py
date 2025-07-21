@@ -2,7 +2,6 @@ from ultralytics import YOLO
 import cv2
 import os
 import uuid
-import re
 
 plate_model = YOLO("/Users/rajirajeev/Documents/Karthika/NUS/Y2/internship/LLM Integration/traffic-intelligence-hub/License Plate Detection v4/runs/detect/train/weights/best.pt")
 char_model = YOLO("/Users/rajirajeev/Documents/Karthika/NUS/Y2/internship/LLM Integration/traffic-intelligence-hub/License Plate Characters v5/weights.pt") 

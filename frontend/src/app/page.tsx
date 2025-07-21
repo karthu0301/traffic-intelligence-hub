@@ -14,29 +14,33 @@ type Detection = {
 };
 
 type Result = {
+  id: number;
   filename: string;
   annotated_image: string;
-  detections: Detection[];
+  detections?: Detection[];
   timestamp?: string;
 };
 
 const charMap = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
 export default function Home() {
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [result, setResult] = useState<Result | null>(null);
   const [history, setHistory] = useState<Result[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(5); 
   const [totalResults, setTotalResults] = useState(0);
+  const [sortBy, setSortBy] = useState("timestamp");
+  const [order, setOrder] = useState("desc");
 
-
-  const uploadFile = async () => {
-    if (!file) return;
+  const uploadFiles = async () => {
+    if (files.length === 0) return;
 
     const formData = new FormData();
-    formData.append('file', file);
+    for (let file of files) {
+      formData.append('files', file);
+    }
 
     try {
       const res = await fetch('http://192.168.50.143:8000/upload', {
@@ -44,26 +48,43 @@ export default function Home() {
         body: formData,
       });
 
-      if (!res.ok) {
-        throw new Error(`Failed to upload. Status: ${res.status}`);
-      }
+      if (!res.ok) throw new Error(`Failed to upload. Status: ${res.status}`);
 
-      const data = await res.json();
-      setResult(data);
+      const data: Result[] = await res.json();
+
+      const detailedResult = await fetch(`http://192.168.50.143:8000/result/${data[0].id}`);
+      const fullResult = await detailedResult.json();
+
+      setResult(fullResult);
+      setFiles([]);
+      setHistory((prev) => [...data, ...prev]);
     } catch (err) {
       console.error('❌ Upload failed:', err);
       alert(`Upload failed: ${err}`);
     }
   };
 
+  const fetchFullResult = async (id: number) => {
+    try {
+      const res = await fetch(`http://192.168.50.143:8000/result/${id}`);
+      if (!res.ok) throw new Error("Failed to fetch result");
+      const full = await res.json();
+      setResult(full);
+    } catch (err) {
+      console.error("Failed to fetch full result:", err);
+    }
+  };
+
   useEffect(() => {
     const fetchFiltered = async () => {
-    const query = new URLSearchParams();
-    if (searchTerm) {
-      query.append("plate_query", searchTerm);
-      query.append("filename_query", searchTerm);
-    }
-    query.append("limit", pageSize.toString());
+      const query = new URLSearchParams();
+      if (searchTerm) {
+        query.append("plate_query", searchTerm);
+        query.append("filename_query", searchTerm);
+      }
+      query.append("sort_by", sortBy);
+      query.append("order", order);
+      query.append("limit", pageSize.toString());
     query.append("offset", ((currentPage - 1) * pageSize).toString());
 
     const res = await fetch(`http://192.168.50.143:8000/search?${query}`);
@@ -73,6 +94,26 @@ export default function Home() {
   };
   fetchFiltered();
 }, [searchTerm, currentPage]);
+
+  const deleteRecord = async (id: number) => {
+  const confirmed = confirm("Are you sure you want to delete this upload?");
+  if (!confirmed) return;
+
+  try {
+    const res = await fetch(`http://192.168.50.143:8000/delete/${id}`, {
+      method: 'DELETE'
+    });
+
+    if (!res.ok) throw new Error(`Failed to delete. Status: ${res.status}`);
+
+    setHistory(prev => prev.filter(r => r.id !== id));
+    if (result?.id === id) setResult(null);
+  } catch (err) {
+    console.error("❌ Failed to delete:", err);
+    alert("Failed to delete. Try again.");
+  }
+};
+
 
 
   return (
@@ -85,30 +126,25 @@ export default function Home() {
         <div className="flex flex-col space-y-2">
           <div className="flex items-center space-x-2">
             <label className="bg-[#94B4C1] text-[#213448] font-semibold text-sm px-3 py-1.5 rounded cursor-pointer">
-              Choose File
+              Choose File(s)
               <input
                 type="file"
-                onChange={(e) => setFile(e.target.files?.[0] || null)}
+                multiple
+                onChange={(e) => setFiles(Array.from(e.target.files || []))}
                 style={{ display: 'none' }}
-                id="fileInput"
               />
             </label>
-            {file && (
-              <span className="text-sm text-[#ECEFCA] truncate max-w-[10rem]">
-                {file.name}
-              </span>
+            {files.length > 0 && (
+              <p className="text-xs text-gray-300 mt-2">
+                {files.map(f => f.name).join(', ')}
+              </p>
             )}
           </div>
           <button
-            onClick={async () => {
-              await uploadFile();
-              setFile(null); // Clear file state
-              const inputEl = document.getElementById("fileInput") as HTMLInputElement;
-              if (inputEl) inputEl.value = ""; // Reset actual input
-            }}
+            onClick={uploadFiles}
             className="bg-[#ECEFCA] text-[#213448] px-4 py-2 rounded font-semibold text-sm"
           >
-            Upload Image
+            Upload Image(s)
           </button>
         </div>
 
@@ -121,16 +157,40 @@ export default function Home() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
-
+          <div className="flex space-x-2 mb-2">
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="text-[#213448] text-sm rounded p-1"
+            >
+              <option value="timestamp">Sort by Timestamp</option>
+              <option value="filename">Sort by Filename</option>
+            </select>
+            <select
+              value={order}
+              onChange={(e) => setOrder(e.target.value)}
+              className="text-[#213448] text-sm rounded p-1"
+            >
+              <option value="desc">Descending</option>
+              <option value="asc">Ascending</option>
+            </select>
+          </div>
           {history.length > 0 ? (
             <>
               <h2 className="text-lg font-semibold mb-2">📜 Upload History</h2>
+              <a
+                href={`http://192.168.50.143:8000/download-all?plate_query=${searchTerm}&filename_query=${searchTerm}`}
+                download
+                className="text-sm text-blue-200 underline block mt-2"
+              >
+                ⬇ Download Results (ZIP)
+              </a>
               <ul className="space-y-2 overflow-y-auto max-h-[60vh] pr-2">
                 {history.map((h, idx) => (
                   <li
                     key={idx}
                     className="flex items-center space-x-2 bg-[#94B4C1] p-2 rounded cursor-pointer"
-                    onClick={() => setResult(h)}
+                    onClick={() => fetchFullResult(h.id)}
                   >
                     <img
                       src={`http://192.168.50.143:8000${h.annotated_image}`}
@@ -138,11 +198,32 @@ export default function Home() {
                       className="w-12 h-12 object-cover rounded-sm border"
                     />
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-[#213448]">{h.filename}</p>
-                      <p className="text-xs text-[#21344880]">
-                        {h.timestamp?.slice(0, 19).replace("T", " ")}
-                      </p>
-                    </div>
+                        <p className="text-sm font-medium text-[#213448]">{h.filename}</p>
+                        <p className="text-xs text-[#21344880]">
+                          {h.timestamp?.slice(0, 19).replace("T", " ")}
+                        </p>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteRecord(h.id);
+                        }}
+                        className="text-[#992222] hover:text-[#cc4444] cursor-pointer text-lg"
+                        title="Delete"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-5 w-5"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M6 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 112 0v6a1 1 0 11-2 0V8zM4 5a1 1 0 011-1h10a1 1 0 011 1v1H4V5zm2-3a1 1 0 00-1 1v1h10V3a1 1 0 00-1-1H6z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      </button>
                   </li>
                 ))}
               </ul>
@@ -186,11 +267,18 @@ export default function Home() {
                 alt="Annotated"
                 className="w-full max-w-4xl border-4 border-[#94B4C1] rounded-md"
               />
+              <a
+                href={`http://192.168.50.143:8000${result.annotated_image}`}
+                download
+                className="text-blue-200 underline text-sm"
+              >
+                ⬇ Download Annotated Image
+              </a>
             </div>
 
             <div>
               <h3 className="text-lg font-semibold mb-2 text-[#94B4C1]">Detected Plates</h3>
-              {result.detections.length > 0 ? (
+              {result.detections && result.detections.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {result.detections.map((detection, idx) => (
                     <div key={idx} className="bg-[#547792] p-3 rounded border border-[#ECEFCA] text-sm">
@@ -205,6 +293,13 @@ export default function Home() {
                         <strong>Characters:</strong>{" "}
                         {detection.characters?.map(c => charMap[c.class_id] || "?").join('') || "N/A"}
                       </p>
+                      <a
+                        href={`http://192.168.50.143:8000${detection.plate_crop_path}`}
+                        download
+                        className="text-blue-200 underline text-xs"
+                      >
+                        ⬇ Download Crop
+                      </a>
                     </div>
                   ))}
                 </div>
