@@ -1,18 +1,30 @@
 'use client';
 import { useState, useEffect } from 'react';
 import "./globals.css";
-import { Bar } from 'react-chartjs-2';
+import { Line, Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  BarElement
+} from 'chart.js';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
   BarElement,
   Title,
   Tooltip,
   Legend
-} from 'chart.js';
+);
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
 type Detection = {
   plate_string: string;
@@ -46,7 +58,32 @@ export default function Home() {
   const [sortBy, setSortBy] = useState("timestamp");
   const [order, setOrder] = useState("desc");
   const [plateFrequency, setPlateFrequency] = useState<{ plate: string; count: number }[]>([]);
+  const [accuracyTrends, setAccuracyTrends] = useState<{ date: string; avg_confidence: number }[]>([]);
 
+ const trendData = {
+  labels: accuracyTrends.map((t) => t.date),
+  datasets: [
+    {
+      label: 'Avg Detection Confidence',
+      data: accuracyTrends.map((t) => t.avg_confidence),
+      borderColor: '#94B4C1',
+      backgroundColor: 'rgba(148, 180, 193, 0.2)',
+      tension: 0.3,
+      fill: true
+    }
+  ]
+};
+
+const trendOptions = {
+  responsive: true,
+  plugins: {
+    legend: { display: true },
+    title: {
+      display: true,
+      text: 'Detection Accuracy Trends'
+    }
+  }
+};
   const uploadFiles = async () => {
     if (files.length === 0) return;
 
@@ -154,6 +191,14 @@ export default function Home() {
   }
 };
 
+useEffect(() => {
+  const fetchTrends = async () => {
+    const res = await fetch("http://192.168.50.143:8000/detection-accuracy-trends");
+    const data = await res.json();
+    setAccuracyTrends(data);
+  };
+  fetchTrends();
+}, []);
 
   return (
     <main className="min-h-screen flex flex-col md:flex-row bg-[#213448] text-white font-sans">
@@ -346,7 +391,15 @@ export default function Home() {
           <p className="text-gray-400">Upload an image to begin.</p>
         )}
       </section>
-
+      <aside className="md:w-1/4 bg-[#1B2C3E] p-6 border-l border-[#ECEFCA]">
+        {accuracyTrends.length > 0 && (
+          <div className="mt-10">
+            <h3 className="text-lg font-semibold mb-4 text-[#94B4C1]">📈 Detection Accuracy Trends</h3>
+            <div className="bg-[#547792] p-4 rounded-lg border border-[#ECEFCA]">
+              <Line data={trendData} options={trendOptions} />
+            </div>
+          </div>
+       </aside>
       {/* Plate Frequency Chart Panel */}
       <aside className="md:w-1/4 bg-[#1B2C3E] p-6 border-l border-[#ECEFCA]">
         <h3 className="text-lg font-semibold mb-4 text-[#94B4C1]">📊 Plate Frequency Chart</h3>
