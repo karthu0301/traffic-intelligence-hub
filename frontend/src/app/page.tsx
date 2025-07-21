@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import "./globals.css";
-import { Line } from 'react-chartjs-2';
+import { Line, Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -25,6 +25,7 @@ ChartJS.register(
   Legend
 );
 
+
 type Detection = {
   plate_string: string;
   plate_confidence: number;
@@ -37,22 +38,29 @@ type Detection = {
 };
 
 type Result = {
+  id: number;
   filename: string;
   annotated_image: string;
-  detections: Detection[];
+  detections?: Detection[];
   timestamp?: string;
 };
 
 const charMap = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
 export default function Home() {
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [result, setResult] = useState<Result | null>(null);
   const [history, setHistory] = useState<Result[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5); 
+  const [totalResults, setTotalResults] = useState(0);
+  const [sortBy, setSortBy] = useState("timestamp");
+  const [order, setOrder] = useState("desc");
+  const [plateFrequency, setPlateFrequency] = useState<{ plate: string; count: number }[]>([]);
   const [accuracyTrends, setAccuracyTrends] = useState<{ date: string; avg_confidence: number }[]>([]);
 
-  const trendData = {
+ const trendData = {
   labels: accuracyTrends.map((t) => t.date),
   datasets: [
     {
@@ -76,12 +84,13 @@ const trendOptions = {
     }
   }
 };
-
-  const uploadFile = async () => {
-    if (!file) return;
+  const uploadFiles = async () => {
+    if (files.length === 0) return;
 
     const formData = new FormData();
-    formData.append('file', file);
+    for (let file of files) {
+      formData.append('files', file);
+    }
 
     try {
       const res = await fetch('http://192.168.50.143:8000/upload', {
@@ -89,33 +98,98 @@ const trendOptions = {
         body: formData,
       });
 
-      if (!res.ok) {
-        throw new Error(`Failed to upload. Status: ${res.status}`);
-      }
 
-      const data = await res.json();
-      setResult(data);
+      if (!res.ok) throw new Error(`Failed to upload. Status: ${res.status}`);
+
+      const data: Result[] = await res.json();
+
+      const detailedResult = await fetch(`http://192.168.50.143:8000/result/${data[0].id}`);
+      const fullResult = await detailedResult.json();
+
+      setResult(fullResult);
+      setFiles([]);
+      setHistory((prev) => [...data, ...prev]);
     } catch (err) {
       console.error('❌ Upload failed:', err);
       alert(`Upload failed: ${err}`);
     }
   };
 
-  useEffect(() => {
-  const fetchFiltered = async () => {
-    const query = new URLSearchParams();
-    if (searchTerm) {
-      query.append("plate_query", searchTerm);
-      query.append("filename_query", searchTerm);
+  const fetchFullResult = async (id: number) => {
+    try {
+      const res = await fetch(`http://192.168.50.143:8000/result/${id}`);
+      if (!res.ok) throw new Error("Failed to fetch result");
+      const full = await res.json();
+      setResult(full);
+    } catch (err) {
+      console.error("Failed to fetch full result:", err);
     }
+  };
+
+  useEffect(() => {
+    const fetchFiltered = async () => {
+      const query = new URLSearchParams();
+      if (searchTerm) {
+        query.append("plate_query", searchTerm);
+        query.append("filename_query", searchTerm);
+      }
+      query.append("sort_by", sortBy);
+      query.append("order", order);
+      query.append("limit", pageSize.toString());
+    query.append("offset", ((currentPage - 1) * pageSize).toString());
 
     const res = await fetch(`http://192.168.50.143:8000/search?${query}`);
     const data = await res.json();
-    setHistory(data);
+    setHistory(data.results);
+    setTotalResults(data.total);
+  };
+  fetchFiltered();
+}, [searchTerm, currentPage]);
+
+  useEffect(() => {
+    const fetchPlateFreq = async () => {
+      const res = await fetch("http://192.168.50.143:8000/plate-frequency");
+      const data = await res.json();
+      setPlateFrequency(data);
+    };
+    fetchPlateFreq();
+  }, []);
+
+  const chartData = {
+    labels: plateFrequency.map((item) => item.plate),
+    datasets: [{
+      label: 'Frequency',
+      data: plateFrequency.map((item) => item.count),
+      backgroundColor: '#94B4C1'
+    }]
   };
 
-  fetchFiltered();
-}, [searchTerm]);
+  const chartOptions = {
+    responsive: true,
+    plugins: {
+      legend: { display: false },
+      title: { display: true, text: 'Plate Frequency Chart' }
+    }
+  };
+  
+  const deleteRecord = async (id: number) => {
+  const confirmed = confirm("Are you sure you want to delete this upload?");
+  if (!confirmed) return;
+
+  try {
+    const res = await fetch(`http://192.168.50.143:8000/delete/${id}`, {
+      method: 'DELETE'
+    });
+
+    if (!res.ok) throw new Error(`Failed to delete. Status: ${res.status}`);
+
+    setHistory(prev => prev.filter(r => r.id !== id));
+    if (result?.id === id) setResult(null);
+  } catch (err) {
+    console.error("❌ Failed to delete:", err);
+    alert("Failed to delete. Try again.");
+  }
+};
 
 useEffect(() => {
   const fetchTrends = async () => {
@@ -131,39 +205,31 @@ useEffect(() => {
       {/* Sidebar */}
       <aside className="md:w-1/4 bg-[#547792] p-4 flex flex-col space-y-4">
         <h1 className="text-2xl font-bold">🚗 Traffic Intelligence Hub</h1>
-
-        {/* Upload Section */}
         <div className="flex flex-col space-y-2">
           <div className="flex items-center space-x-2">
             <label className="bg-[#94B4C1] text-[#213448] font-semibold text-sm px-3 py-1.5 rounded cursor-pointer">
-              Choose File
+              Choose File(s)
               <input
                 type="file"
-                onChange={(e) => setFile(e.target.files?.[0] || null)}
+                multiple
+                onChange={(e) => setFiles(Array.from(e.target.files || []))}
                 style={{ display: 'none' }}
-                id="fileInput"
               />
             </label>
-            {file && (
-              <span className="text-sm text-[#ECEFCA] truncate max-w-[10rem]">
-                {file.name}
-              </span>
+            {files.length > 0 && (
+              <p className="text-xs text-gray-300 mt-2">
+                {files.map(f => f.name).join(', ')}
+              </p>
             )}
           </div>
           <button
-            onClick={async () => {
-              await uploadFile();
-              setFile(null); // Clear file state
-              const inputEl = document.getElementById("fileInput") as HTMLInputElement;
-              if (inputEl) inputEl.value = ""; // Reset actual input
-            }}
+            onClick={uploadFiles}
             className="bg-[#ECEFCA] text-[#213448] px-4 py-2 rounded font-semibold text-sm"
           >
-            Upload Image
+            Upload Image(s)
           </button>
         </div>
 
-        {/* Search + History */}
         <div className="flex flex-col mt-4">
           <input
             type="text"
@@ -172,16 +238,40 @@ useEffect(() => {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
-
+          <div className="flex space-x-2 mb-2">
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="text-[#213448] text-sm rounded p-1"
+            >
+              <option value="timestamp">Sort by Timestamp</option>
+              <option value="filename">Sort by Filename</option>
+            </select>
+            <select
+              value={order}
+              onChange={(e) => setOrder(e.target.value)}
+              className="text-[#213448] text-sm rounded p-1"
+            >
+              <option value="desc">Descending</option>
+              <option value="asc">Ascending</option>
+            </select>
+          </div>
           {history.length > 0 ? (
             <>
               <h2 className="text-lg font-semibold mb-2">📜 Upload History</h2>
+              <a
+                href={`http://192.168.50.143:8000/download-all?plate_query=${searchTerm}&filename_query=${searchTerm}`}
+                download
+                className="text-sm text-blue-200 underline block mt-2"
+              >
+                ⬇ Download Results (ZIP)
+              </a>
               <ul className="space-y-2 overflow-y-auto max-h-[60vh] pr-2">
                 {history.map((h, idx) => (
                   <li
                     key={idx}
                     className="flex items-center space-x-2 bg-[#94B4C1] p-2 rounded cursor-pointer"
-                    onClick={() => setResult(h)}
+                    onClick={() => fetchFullResult(h.id)}
                   >
                     <img
                       src={`http://192.168.50.143:8000${h.annotated_image}`}
@@ -189,11 +279,32 @@ useEffect(() => {
                       className="w-12 h-12 object-cover rounded-sm border"
                     />
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-[#213448]">{h.filename}</p>
-                      <p className="text-xs text-[#21344880]">
-                        {h.timestamp?.slice(0, 19).replace("T", " ")}
-                      </p>
-                    </div>
+                        <p className="text-sm font-medium text-[#213448]">{h.filename}</p>
+                        <p className="text-xs text-[#21344880]">
+                          {h.timestamp?.slice(0, 19).replace("T", " ")}
+                        </p>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteRecord(h.id);
+                        }}
+                        className="text-[#992222] hover:text-[#cc4444] cursor-pointer text-lg"
+                        title="Delete"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-5 w-5"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M6 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 112 0v6a1 1 0 11-2 0V8zM4 5a1 1 0 011-1h10a1 1 0 011 1v1H4V5zm2-3a1 1 0 00-1 1v1h10V3a1 1 0 00-1-1H6z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      </button>
                   </li>
                 ))}
               </ul>
@@ -202,15 +313,33 @@ useEffect(() => {
             <p className="text-sm mt-2 text-[#ECEFCA]">No history yet.</p>
           )}
         </div>
+        <div className="flex items-center justify-between mt-4 text-sm">
+        <button
+          onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+          disabled={currentPage === 1}
+          className="px-3 py-1 rounded bg-[#ECEFCA] text-[#213448] disabled:opacity-50"
+        >
+          ⬅ Prev
+        </button>
+        <span>
+          Page {currentPage} of {Math.ceil(totalResults / pageSize)}
+        </span>
+        <button
+          onClick={() => setCurrentPage((p) => p + 1)}
+          disabled={currentPage >= Math.ceil(totalResults / pageSize)}
+          className="px-3 py-1 rounded bg-[#ECEFCA] text-[#213448] disabled:opacity-50"
+        >
+          Next ➡
+        </button>
+      </div>
       </aside>
-
+      
       {/* Main Viewer */}
-      <section className="md:flex-1 p-6 overflow-y-auto">
+      <section className="md:w-2/4 p-6 overflow-y-auto">
         {result ? (
           <>
             <h2 className="text-xl font-semibold mb-2 text-[#ECEFCA]">✅ Detection Results</h2>
             <p className="text-sm text-gray-300 mb-4">{result.filename}</p>
-
             <div className="mb-6">
               <h3 className="text-lg font-semibold mb-2 text-[#94B4C1]">Annotated Image</h3>
               <img
@@ -218,11 +347,17 @@ useEffect(() => {
                 alt="Annotated"
                 className="w-full max-w-4xl border-4 border-[#94B4C1] rounded-md"
               />
+              <a
+                href={`http://192.168.50.143:8000${result.annotated_image}`}
+                download
+                className="text-blue-200 underline text-sm"
+              >
+                ⬇ Download Annotated Image
+              </a>
             </div>
-
             <div>
               <h3 className="text-lg font-semibold mb-2 text-[#94B4C1]">Detected Plates</h3>
-              {result.detections.length > 0 ? (
+              {result.detections && result.detections.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {result.detections.map((detection, idx) => (
                     <div key={idx} className="bg-[#547792] p-3 rounded border border-[#ECEFCA] text-sm">
@@ -237,6 +372,13 @@ useEffect(() => {
                         <strong>Characters:</strong>{" "}
                         {detection.characters?.map(c => charMap[c.class_id] || "?").join('') || "N/A"}
                       </p>
+                      <a
+                        href={`http://192.168.50.143:8000${detection.plate_crop_path}`}
+                        download
+                        className="text-blue-200 underline text-xs"
+                      >
+                        ⬇ Download Crop
+                      </a>
                     </div>
                   ))}
                 </div>
@@ -257,6 +399,16 @@ useEffect(() => {
               <Line data={trendData} options={trendOptions} />
             </div>
           </div>
+       </aside>
+      {/* Plate Frequency Chart Panel */}
+      <aside className="md:w-1/4 bg-[#1B2C3E] p-6 border-l border-[#ECEFCA]">
+        <h3 className="text-lg font-semibold mb-4 text-[#94B4C1]">📊 Plate Frequency Chart</h3>
+        {plateFrequency.length > 0 ? (
+          <div className="bg-[#547792] p-4 rounded-lg border border-[#ECEFCA]">
+            <Bar data={chartData} options={chartOptions} />
+          </div>
+        ) : (
+          <p className="text-sm text-[#ECEFCA]">No frequency data yet.</p>
         )}
       </aside>
     </main>
