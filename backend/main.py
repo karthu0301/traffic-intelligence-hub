@@ -1,8 +1,8 @@
-from fastapi import FastAPI, UploadFile, File, Query, Path
+from fastapi import FastAPI, UploadFile, File, Query, Path, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
-from sqlmodel import SQLModel, create_engine, Session, select
+from sqlmodel import SQLModel, create_engine, Session, select, delete
 from models import DetectionRecord, PlateInfo, CharacterBox
 from datetime import datetime
 import shutil, os, io
@@ -166,3 +166,16 @@ def download_all_results(
     zip_filename = f"all_results_{datetime.now().strftime('%Y%m%d-%H%M%S')}.zip"
     return FileResponse(tmp_zip.name, media_type="application/zip", filename=zip_filename)
 
+@app.delete("/delete/{record_id}")
+def delete_record(record_id: int = Path(...)):
+    with Session(engine) as session:
+        record = session.get(DetectionRecord, record_id)
+        if not record:
+            raise HTTPException(status_code=404, detail="Record not found")
+
+        # Also delete related PlateInfo and CharacterBox entries
+        session.exec(delete(PlateInfo).where(PlateInfo.detection_id == record_id))
+        session.exec(delete(CharacterBox).where(CharacterBox.detection_id == record_id))
+        session.delete(record)
+        session.commit()
+    return {"message": "Record deleted"}
