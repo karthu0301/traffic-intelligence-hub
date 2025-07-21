@@ -1,8 +1,8 @@
-from fastapi import FastAPI, UploadFile, File, Query, Path, HTTPException
+from fastapi import FastAPI, UploadFile, File, Query, APIRouter, Path, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, FileResponse
 from sqlmodel import SQLModel, create_engine, Session, select, delete
+from collections import Counter
 from models import DetectionRecord, PlateInfo, CharacterBox
 from datetime import datetime
 import shutil, os, io
@@ -197,10 +197,15 @@ def delete_record(record_id: int = Path(...)):
         if not record:
             raise HTTPException(status_code=404, detail="Record not found")
 
-        # Also delete related PlateInfo and CharacterBox entries
         session.exec(delete(PlateInfo).where(PlateInfo.detection_id == record_id))
         session.exec(delete(CharacterBox).where(CharacterBox.detection_id == record_id))
         session.delete(record)
         session.commit()
     return {"message": "Record deleted"}
-  
+
+@app.get("/plate-frequency")
+def plate_frequency():
+    with Session(engine) as session:
+        plates = session.exec(select(PlateInfo.plate_string)).all()
+        counter = Counter(plates)
+        return [{"plate": plate, "count": count} for plate, count in counter.items()]
