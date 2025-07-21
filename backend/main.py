@@ -68,7 +68,12 @@ def get_history():
         return records
 
 @app.get("/search")
-def search(plate_query: str = Query(None), filename_query: str = Query(None)):
+def search(
+    plate_query: str = Query(None),
+    filename_query: str = Query(None),
+    sort_by: str = Query("timestamp"),
+    order: str = Query("desc")
+):
     with Session(engine) as session:
         query = select(DetectionRecord)
 
@@ -81,7 +86,18 @@ def search(plate_query: str = Query(None), filename_query: str = Query(None)):
             ).all()
             query = query.where(DetectionRecord.id.in_(detection_ids))
 
-        results = session.exec(query.order_by(DetectionRecord.id.desc())).all()
+        # Sorting
+        if sort_by == "filename":
+            sort_column = DetectionRecord.filename
+        else:
+            sort_column = DetectionRecord.timestamp
+
+        if order == "asc":
+            query = query.order_by(sort_column.asc())
+        else:
+            query = query.order_by(sort_column.desc())
+
+        results = session.exec(query).all()
         return results
 
 @app.get("/result/{detection_id}")
