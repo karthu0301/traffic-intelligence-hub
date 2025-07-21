@@ -71,6 +71,8 @@ def get_history():
 def search(
     plate_query: str = Query(None),
     filename_query: str = Query(None),
+    limit: int = Query(10),
+    offset: int = Query(0)
     sort_by: str = Query("timestamp"),
     order: str = Query("desc")
 ):
@@ -85,7 +87,7 @@ def search(
                 select(PlateInfo.detection_id).where(PlateInfo.plate_string.contains(plate_query))
             ).all()
             query = query.where(DetectionRecord.id.in_(detection_ids))
-
+            
         # Sorting
         if sort_by == "filename":
             sort_column = DetectionRecord.filename
@@ -97,8 +99,14 @@ def search(
         else:
             query = query.order_by(sort_column.desc())
 
-        results = session.exec(query).all()
-        return results
+        all_results = session.exec(query).all()
+        total = len(all_results)
+        results = all_results[offset : offset + limit]
+
+        return {
+            "results": results,
+            "total": total
+        }
 
 @app.get("/result/{detection_id}")
 def get_full_result(detection_id: int = Path(...)):
@@ -195,3 +203,4 @@ def delete_record(record_id: int = Path(...)):
         session.delete(record)
         session.commit()
     return {"message": "Record deleted"}
+  
