@@ -2,7 +2,7 @@ from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Path, Q
 from fastapi.responses import JSONResponse, FileResponse
 from sqlmodel import Session, select, delete
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 from collections import defaultdict, Counter
 import shutil, os, tempfile, zipfile
 
@@ -16,27 +16,41 @@ router = APIRouter()
 UPLOAD_DIR = "../data/"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+def to_static_path(local_path: str) -> str:
+    # local_path like 'runs/results/annotated_x.jpg' → '/static/results/annotated_x.jpg'
+    rel = os.path.relpath(local_path, "runs")        # strip the leading 'runs/'
+    return f"/static/{rel}"
+
 @router.post("/upload")
-async def upload(file: UploadFile = File(...), user: Optional[User] = Depends(get_current_user_optional)):
-    file_path = os.path.join(UPLOAD_DIR, file.filename)
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+async def upload(files: List[UploadFile] = File(...), user: Optional[User] = Depends(get_current_user_optional)):
+    results = []
+    for file in files:
+        file_path = os.path.join(UPLOAD_DIR, file.filename)
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
 
-    result = detect_plates_and_characters(file_path)
+        result = detect_plates_and_characters(file_path)
 
-    if user:
-        with Session(engine) as session:
-            record = save_detection_to_db(session, file.filename, result, user_id=user.id)
-    else:
-        record = None
+        result["annotated_image"] = to_static_path(result["annotated_image"])
+        for det in result["detections"]:
+            det["plate_crop_path"] = to_static_path(det["plate_crop_path"])
+            
+        if user:
+            with Session(engine) as session:
+                record = save_detection_to_db(session, file.filename, result, user_id=user.id)
+        else:
+            record = None
 
-    return {
-        "filename": file.filename,
-        "timestamp": datetime.now().isoformat(),
-        "annotated_image": result["annotated_image_path"],
-        "detections": result["detections"],
-        "saved": user is not None
-    }
+        results.append({
+            "filename": file.filename,
+            "timestamp": datetime.now().isoformat(),
+            "annotated_image": result["annotated_image"],
+            "detections": result["detections"],
+            "saved": user is not None
+        })
+
+    return results
+
 
 @router.get("/history")
 def get_history():
