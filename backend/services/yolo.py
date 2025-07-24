@@ -2,15 +2,19 @@ from ultralytics import YOLO
 import cv2
 import os
 import uuid
+from pathlib import Path
 
 plate_model = YOLO("/Users/rajirajeev/Documents/Karthika/NUS/Y2/internship/LLM Integration/traffic-intelligence-hub/License Plate Detection v4/runs/detect/train/weights/best.pt")
 char_model = YOLO("/Users/rajirajeev/Documents/Karthika/NUS/Y2/internship/LLM Integration/traffic-intelligence-hub/License Plate Characters v5/weights.pt") 
 
+BASE_DIR   = Path(__file__).resolve().parent.parent   
+RESULTS_DIR = BASE_DIR / "runs" / "results"
+RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
 char_map = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
-def detect_plates_and_characters(image_path: str, save_dir: str = "../runs/results"):
-    os.makedirs(save_dir, exist_ok=True)
-    result_id = str(uuid.uuid4())[:8]
+def detect_plates_and_characters(image_path: str):
+    result_id = uuid.uuid4().hex[:8]
 
     image = cv2.imread(image_path)
     plate_results = plate_model(image_path)[0]
@@ -22,8 +26,8 @@ def detect_plates_and_characters(image_path: str, save_dir: str = "../runs/resul
 
         crop = image[y1:y2, x1:x2]
         crop_filename = f"plate_{result_id}_{i}.jpg"
-        crop_path = os.path.join(save_dir, crop_filename)
-        cv2.imwrite(crop_path, crop)
+        crop_path = RESULTS_DIR / crop_filename
+        cv2.imwrite(str(crop_path), crop)
 
         # Character detection
         char_results = char_model(crop)[0]
@@ -73,8 +77,8 @@ def detect_plates_and_characters(image_path: str, save_dir: str = "../runs/resul
 
     # Save annotated full image
     annotated_filename = f"annotated_{result_id}.jpg"
-    annotated_path = os.path.join(save_dir, annotated_filename)
-    plate_results.save(filename=annotated_path)
+    annotated_path = RESULTS_DIR / annotated_filename
+    plate_results.save(filename=str(annotated_path))
 
     return {
         "annotated_image": f"/static/results/{annotated_filename}",

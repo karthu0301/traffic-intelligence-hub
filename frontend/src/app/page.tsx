@@ -118,6 +118,22 @@ export default function Home() {
       if (isAuthenticated) {
         // persisted path
         await fetchFiltered();
+        try {
+         const [pfRes, atRes] = await Promise.all([
+           fetch("http://192.168.50.143:8000/plate-frequency"),
+           fetch("http://192.168.50.143:8000/detection-accuracy-trends"),
+         ]);
+         if (pfRes.ok) {
+           const pf = await pfRes.json();
+           setPlateFrequency(pf);
+         }
+         if (atRes.ok) {
+           const at = await atRes.json();
+           setAccuracyTrends(at);
+         }
+       } catch (e) {
+         console.error("Failed to refresh analytics:", e);
+       }
         const newest = uploaded[uploaded.length - 1];
         if (newest) {
           const match = history.find((h) => h.filename === newest.filename);
@@ -141,6 +157,8 @@ export default function Home() {
       console.error("Upload failed:", err);
       alert(`Upload failed: ${err}`);
     }
+
+
   };
 
   // delete record
@@ -429,26 +447,41 @@ export default function Home() {
             <p className="text-gray-400">Upload an image to begin.</p>
           )}
         </section>
-        <aside className="md:w-1/4 bg-[#1B2C3E] p-6 border-l border-[#ECEFCA]">
-          {accuracyTrends.length > 0 && (
-            <div className="mt-10">
-              <h3 className="text-lg font-semibold mb-4 text-[#94B4C1]">📈 Detection Accuracy Trends</h3>
-              <div className="bg-[#547792] p-4 rounded-lg border border-[#ECEFCA]">
+        {!isAuthenticated && (
+          <p className="text-center text-yellow-300 my-6">
+            Log in to save and view more analytics on your data!{" "}
+            <Link href="/login" className="underline">
+              Login
+            </Link>
+          </p>
+        )}
+
+        {/* 2) If logged IN, show both analytics panels */}
+        {isAuthenticated && (
+          <>
+            <aside className="md:w-1/4 bg-[#1B2C3E] p-6 border-l border-[#ECEFCA]">
+              <h3 className="text-lg font-semibold mb-4 text-[#94B4C1]">
+                📈 Detection Accuracy Trends
+              </h3>
+              {accuracyTrends.length > 0 ? (
                 <Line data={trendData} options={trendOptions} />
-              </div>
-            </div>
-          )}
-        </aside>
-        <aside className="md:w-1/4 bg-[#1B2C3E] p-6 border-l border-[#ECEFCA]">
-          <h3 className="text-lg font-semibold mb-4 text-[#94B4C1]">📊 Plate Frequency Chart</h3>
-          {plateFrequency.length > 0 ? (
-            <div className="bg-[#547792] p-4 rounded-lg border border-[#ECEFCA]">
-              <Bar data={chartData} options={chartOptions} />
-            </div>
-          ) : (
-            <p className="text-sm text-[#ECEFCA]">No frequency data yet.</p>
-          )}
-        </aside>
+              ) : (
+                <p className="text-sm text-[#ECEFCA]">No accuracy data yet.</p>
+              )}
+            </aside>
+
+            <aside className="md:w-1/4 bg-[#1B2C3E] p-6 border-l border-[#ECEFCA]">
+              <h3 className="text-lg font-semibold mb-4 text-[#94B4C1]">
+                📊 Plate Frequency Chart
+              </h3>
+              {plateFrequency.length > 0 ? (
+                <Bar data={chartData} options={chartOptions} />
+              ) : (
+                <p className="text-sm text-[#ECEFCA]">No frequency data yet.</p>
+              )}
+            </aside>
+          </>
+        )}
       </main>
     </>
   );

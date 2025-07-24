@@ -31,7 +31,9 @@ async def upload(files: List[UploadFile] = File(...), user: Optional[User] = Dep
 
         result = detect_plates_and_characters(file_path)
 
-        result["annotated_image"] = to_static_path(result["annotated_image"])
+        static_annotated = to_static_path(result["annotated_image"])
+        result["annotated_image"] = static_annotated
+        result["annotated_image_path"] = static_annotated
         for det in result["detections"]:
             det["plate_crop_path"] = to_static_path(det["plate_crop_path"])
             
