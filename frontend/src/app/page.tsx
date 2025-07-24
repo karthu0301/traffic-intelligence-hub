@@ -1,6 +1,8 @@
 'use client';
 import { useState, useEffect } from 'react';
 import "./globals.css";
+import { useAuth } from './hooks/useAuth';
+import { useRouter } from 'next/navigation';
 import { Line, Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -13,6 +15,7 @@ import {
   Legend,
   BarElement
 } from 'chart.js';
+import Link from 'next/link';
 
 ChartJS.register(
   CategoryScale,
@@ -48,7 +51,10 @@ type Result = {
 const charMap = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
 export default function Home() {
+  const router = useRouter();
+  const { token, isAuthenticated, logout } = useAuth();
   const [files, setFiles] = useState<File[]>([]);
+  const [isSaved, setIsSaved] = useState(true);
   const [result, setResult] = useState<Result | null>(null);
   const [history, setHistory] = useState<Result[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -60,60 +66,58 @@ export default function Home() {
   const [plateFrequency, setPlateFrequency] = useState<{ plate: string; count: number }[]>([]);
   const [accuracyTrends, setAccuracyTrends] = useState<{ date: string; avg_confidence: number }[]>([]);
 
- const trendData = {
-  labels: accuracyTrends.map((t) => t.date),
-  datasets: [
-    {
-      label: 'Avg Detection Confidence',
-      data: accuracyTrends.map((t) => t.avg_confidence),
-      borderColor: '#94B4C1',
-      backgroundColor: 'rgba(148, 180, 193, 0.2)',
-      tension: 0.3,
-      fill: true
-    }
-  ]
-};
+  const uploadFiles = async () => {
+  if (files.length === 0) return;
 
-const trendOptions = {
-  responsive: true,
-  plugins: {
-    legend: { display: true },
-    title: {
-      display: true,
-      text: 'Detection Accuracy Trends'
+  const formData = new FormData();
+  for (let file of files) {
+    formData.append('files', file);
+  }
+
+  try {
+    const res = await fetch('http://192.168.50.143:8000/upload', {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: formData,
+    });
+
+    if (!res.ok) throw new Error(`Failed to upload. Status: ${res.status}`);
+
+    const data = await res.json();
+    setIsSaved(data.saved);
+
+    const detailedResult = await fetch(`http://192.168.50.143:8000/result/${data.id}`);
+    const fullResult = await detailedResult.json();
+    setResult(fullResult);
+    setFiles([]);
+    if (data.saved) {
+      setHistory((prev) => [fullResult, ...prev]);
     }
+  } catch (err) {
+    console.error('❌ Upload failed:', err);
+    alert(`Upload failed: ${err}`);
   }
 };
-  const uploadFiles = async () => {
-    if (files.length === 0) return;
-
-    const formData = new FormData();
-    for (let file of files) {
-      formData.append('files', file);
-    }
-
-    try {
-      const res = await fetch('http://192.168.50.143:8000/upload', {
-        method: 'POST',
-        body: formData,
-      });
 
 
-      if (!res.ok) throw new Error(`Failed to upload. Status: ${res.status}`);
+  const deleteRecord = async (id: number) => {
+  const confirmed = confirm("Are you sure you want to delete this upload?");
+  if (!confirmed) return;
 
-      const data: Result[] = await res.json();
+  try {
+    const res = await fetch(`http://192.168.50.143:8000/delete/${id}`, {
+      method: 'DELETE'
+    });
 
-      const detailedResult = await fetch(`http://192.168.50.143:8000/result/${data[0].id}`);
-      const fullResult = await detailedResult.json();
+    if (!res.ok) throw new Error(`Failed to delete. Status: ${res.status}`);
 
-      setResult(fullResult);
-      setFiles([]);
-      setHistory((prev) => [...data, ...prev]);
-    } catch (err) {
-      console.error('❌ Upload failed:', err);
-      alert(`Upload failed: ${err}`);
-    }
-  };
+    setHistory(prev => prev.filter(r => r.id !== id));
+    if (result?.id === id) setResult(null);
+  } catch (err) {
+    console.error("❌ Failed to delete:", err);
+    alert("Failed to delete. Try again.");
+  }
+};
 
   const fetchFullResult = async (id: number) => {
     try {
@@ -171,23 +175,30 @@ const trendOptions = {
       title: { display: true, text: 'Plate Frequency Chart' }
     }
   };
-  
-  const deleteRecord = async (id: number) => {
-  const confirmed = confirm("Are you sure you want to delete this upload?");
-  if (!confirmed) return;
 
-  try {
-    const res = await fetch(`http://192.168.50.143:8000/delete/${id}`, {
-      method: 'DELETE'
-    });
 
-    if (!res.ok) throw new Error(`Failed to delete. Status: ${res.status}`);
+ const trendData = {
+  labels: accuracyTrends.map((t) => t.date),
+  datasets: [
+    {
+      label: 'Avg Detection Confidence',
+      data: accuracyTrends.map((t) => t.avg_confidence),
+      borderColor: '#94B4C1',
+      backgroundColor: 'rgba(148, 180, 193, 0.2)',
+      tension: 0.3,
+      fill: true
+    }
+  ]
+};
 
-    setHistory(prev => prev.filter(r => r.id !== id));
-    if (result?.id === id) setResult(null);
-  } catch (err) {
-    console.error("❌ Failed to delete:", err);
-    alert("Failed to delete. Try again.");
+const trendOptions = {
+  responsive: true,
+  plugins: {
+    legend: { display: true },
+    title: {
+      display: true,
+      text: 'Detection Accuracy Trends'
+    }
   }
 };
 
@@ -201,10 +212,31 @@ useEffect(() => {
 }, []);
 
   return (
+    <>
+    {/* Header at the top */}
+    <header className="w-full bg-[#547792] text-white px-6 py-4 flex items-center justify-between sticky top-0 z-50 shadow-md">
+      <h1 className="text-2xl font-bold">🚗 Traffic Intelligence Hub</h1>
+      {isAuthenticated ? (
+        <button
+          onClick={() => {
+            logout();
+            router.push('/login');
+          }}
+          className="bg-red-400 text-white font-semibold px-4 py-2 rounded hover:bg-red-500"
+        >
+          Logout
+        </button>
+      ) : (
+        <Link href="/login">
+          <button className="bg-[#ECEFCA] text-[#213448] font-semibold px-4 py-2 rounded hover:bg-[#d8e4aa]">
+            Login
+          </button>
+        </Link>
+      )}
+    </header>
     <main className="min-h-screen flex flex-col md:flex-row bg-[#213448] text-white font-sans">
       {/* Sidebar */}
       <aside className="md:w-1/4 bg-[#547792] p-4 flex flex-col space-y-4">
-        <h1 className="text-2xl font-bold">🚗 Traffic Intelligence Hub</h1>
         <div className="flex flex-col space-y-2">
           <div className="flex items-center space-x-2">
             <label className="bg-[#94B4C1] text-[#213448] font-semibold text-sm px-3 py-1.5 rounded cursor-pointer">
@@ -340,6 +372,11 @@ useEffect(() => {
           <>
             <h2 className="text-xl font-semibold mb-2 text-[#ECEFCA]">✅ Detection Results</h2>
             <p className="text-sm text-gray-300 mb-4">{result.filename}</p>
+            {!isSaved && (
+              <p className="text-yellow-300 text-sm mb-4">
+                ⚠️ This result is <strong>not saved</strong> and will be lost after you leave this page. <a href="/login" className="underline">Login</a> to save your uploads.
+              </p>
+            )}
             <div className="mb-6">
               <h3 className="text-lg font-semibold mb-2 text-[#94B4C1]">Annotated Image</h3>
               <img
@@ -399,7 +436,8 @@ useEffect(() => {
               <Line data={trendData} options={trendOptions} />
             </div>
           </div>
-       </aside>
+        )}
+      </aside>
       {/* Plate Frequency Chart Panel */}
       <aside className="md:w-1/4 bg-[#1B2C3E] p-6 border-l border-[#ECEFCA]">
         <h3 className="text-lg font-semibold mb-4 text-[#94B4C1]">📊 Plate Frequency Chart</h3>
@@ -412,5 +450,6 @@ useEffect(() => {
         )}
       </aside>
     </main>
+    </>
   );
 }
