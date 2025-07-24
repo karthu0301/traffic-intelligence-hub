@@ -8,7 +8,7 @@ char_model = YOLO("/Users/rajirajeev/Documents/Karthika/NUS/Y2/internship/LLM In
 
 char_map = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
-def detect_plates_and_characters(image_path: str, save_dir: str = "runs/results"):
+def detect_plates_and_characters(image_path: str, save_dir: str = "../runs/results"):
     os.makedirs(save_dir, exist_ok=True)
     result_id = str(uuid.uuid4())[:8]
 
