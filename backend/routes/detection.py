@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Path, Query
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Path, Query, Request
 from fastapi.responses import JSONResponse, FileResponse
 from sqlmodel import Session, select, delete
 from datetime import datetime
@@ -6,11 +6,12 @@ from typing import List, Optional
 from collections import defaultdict, Counter
 import shutil, os, tempfile, zipfile
 
-from db import engine
+from db import engine, get_session
 from models import DetectionRecord, PlateInfo, CharacterBox, User
 from services.yolo import detect_plates_and_characters
 from services.save import save_detection_to_db
 from auth.utils import get_current_user_optional
+from services.llm import ask_about_detections
 
 router = APIRouter()
 UPLOAD_DIR = "../data/"
@@ -200,3 +201,16 @@ def detection_accuracy_trends():
             {"date": date, "avg_confidence": round(sum(confs) / len(confs), 4)}
             for date, confs in sorted(trends.items())
         ])
+
+@router.post("/ask")
+async def ask_question(req: Request):
+    body = await req.json()
+    question = body.get("question")
+
+    with get_session() as session:
+        detections = session.exec(select(DetectionRecord)).all()
+        # Convert to dicts
+        records = [d.model_dump() for d in detections]
+
+    answer = ask_about_detections(question, records)
+    return {"answer": answer}

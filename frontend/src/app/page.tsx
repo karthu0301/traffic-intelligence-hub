@@ -65,6 +65,8 @@ export default function Home() {
   const [order, setOrder] = useState("desc");
   const [plateFrequency, setPlateFrequency] = useState<{ plate: string; count: number }[]>([]);
   const [accuracyTrends, setAccuracyTrends] = useState<{ date: string; avg_confidence: number }[]>([]);
+  const [llmQuestion, setLlmQuestion] = useState("");
+  const [llmAnswer, setLlmAnswer] = useState("");
 
   // fetch paginated history
   const fetchFiltered = useCallback(async () => {
@@ -226,6 +228,21 @@ export default function Home() {
       legend: { display: true },
       title: { display: true, text: "Detection Accuracy Trends" },
     },
+  };
+
+  const askLLM = async () => {
+    try {
+      const res = await fetch("http://192.168.50.143:8000/llm-query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: llmQuestion }),
+      });
+      const data = await res.json();
+      setLlmAnswer(data.answer);
+    } catch (err) {
+      console.error("Failed to query LLM:", err);
+      setLlmAnswer("❌ Failed to get a response.");
+    }
   };
 
   return (
@@ -455,8 +472,6 @@ export default function Home() {
             </Link>
           </p>
         )}
-
-        {/* 2) If logged IN, show both analytics panels */}
         {isAuthenticated && (
           <>
             <aside className="md:w-1/4 bg-[#1B2C3E] p-6 border-l border-[#ECEFCA]">
@@ -468,9 +483,6 @@ export default function Home() {
               ) : (
                 <p className="text-sm text-[#ECEFCA]">No accuracy data yet.</p>
               )}
-            </aside>
-
-            <aside className="md:w-1/4 bg-[#1B2C3E] p-6 border-l border-[#ECEFCA]">
               <h3 className="text-lg font-semibold mb-4 text-[#94B4C1]">
                 📊 Plate Frequency Chart
               </h3>
@@ -479,7 +491,28 @@ export default function Home() {
               ) : (
                 <p className="text-sm text-[#ECEFCA]">No frequency data yet.</p>
               )}
+              <div className="mt-8">
+                <h3 className="text-lg font-semibold text-[#94B4C1] mb-2">💬 Ask a question</h3>
+                <div className="flex flex-col md:flex-row md:items-center space-y-2 md:space-y-0 md:space-x-2">
+                  <input
+                    type="text"
+                    value={llmQuestion}
+                    onChange={(e) => setLlmQuestion(e.target.value)}
+                    placeholder="e.g. What plates were most common yesterday?"
+                    className="flex-1 p-2 rounded bg-[#ECEFCA] text-[#213448]"
+                  />
+                  <button onClick={askLLM} className="bg-[#ECEFCA] text-[#213448] px-4 py-2 rounded font-semibold text-sm">
+                    Ask
+                  </button>
+                </div>
+                {llmAnswer && (
+                  <div className="mt-4 bg-[#547792] p-4 rounded border border-[#ECEFCA]">
+                    <p>{llmAnswer}</p>
+                  </div>
+                )}
+              </div>
             </aside>
+
           </>
         )}
       </main>

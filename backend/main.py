@@ -6,6 +6,7 @@ from pathlib import Path
 from db import engine
 from auth.routes import router as auth_router
 from routes.detection import router as detection_router
+from routes import llm
 
 app = FastAPI()
 
@@ -24,5 +25,6 @@ app.mount("/static", StaticFiles(directory=str(RUNS_DIR)), name="static")
 
 app.include_router(auth_router)
 app.include_router(detection_router)
+app.include_router(llm.router)
 
 SQLModel.metadata.create_all(engine)
