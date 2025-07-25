@@ -11,7 +11,7 @@ from models import DetectionRecord, PlateInfo, CharacterBox, User
 from services.yolo import detect_plates_and_characters
 from services.save import save_detection_to_db
 from auth.utils import get_current_user_optional
-from services.llm import ask_about_detections
+from services.llm import query_llm
 
 router = APIRouter()
 UPLOAD_DIR = "../data/"
@@ -212,5 +212,5 @@ async def ask_question(req: Request):
         # Convert to dicts
         records = [d.model_dump() for d in detections]
 
-    answer = ask_about_detections(question, records)
+    answer = query_llm(question, records)
     return {"answer": answer}
