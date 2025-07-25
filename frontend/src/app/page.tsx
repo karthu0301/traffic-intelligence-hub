@@ -67,6 +67,10 @@ export default function Home() {
   const [accuracyTrends, setAccuracyTrends] = useState<{ date: string; avg_confidence: number }[]>([]);
   const [llmQuestion, setLlmQuestion] = useState("");
   const [llmAnswer, setLlmAnswer] = useState("");
+  const [devQuestion, setDevQuestion] = useState("");
+  const [devAnswer, setDevAnswer] = useState<string | null>(null);
+  const [devPanelOpen, setDevPanelOpen] = useState(false);
+  const [loadingAnswer, setLoadingAnswer] = useState(false);
 
   // fetch paginated history
   const fetchFiltered = useCallback(async () => {
@@ -242,6 +246,28 @@ export default function Home() {
     } catch (err) {
       console.error("Failed to query LLM:", err);
       setLlmAnswer("❌ Failed to get a response.");
+    }
+  };
+
+  const askDevAssistant = async () => {
+    if (!devQuestion.trim()) return;
+    setLoadingAnswer(true);
+    try {
+      const res = await fetch("http://192.168.50.143:8000/llm-query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question: devQuestion,
+          metadata: result // attach current detection result
+        }),
+      });
+      const data = await res.json();
+      setDevAnswer(data.answer);
+    } catch (err) {
+      console.error("Failed to query LLM:", err);
+      setDevAnswer("Error: Could not fetch answer.");
+    } finally {
+      setLoadingAnswer(false);
     }
   };
 
@@ -511,6 +537,37 @@ export default function Home() {
                   </div>
                 )}
               </div>
+              <button
+                onClick={() => setDevPanelOpen((prev) => !prev)}
+                className="fixed bottom-4 right-4 bg-[#94B4C1] text-[#213448] px-4 py-2 rounded-lg font-bold shadow-lg z-50"
+              >
+                {devPanelOpen ? 'Close Assistant' : 'Open Assistant'}
+              </button>
+
+              {devPanelOpen && (
+                <div className="md:w-1/4 bg-[#1B2C3E] p-6 border-l border-[#ECEFCA]">
+                  <h3 className="text-lg font-semibold mb-4 text-[#94B4C1]">🛠 Developer Assistant</h3>
+                  <textarea
+                    placeholder="Ask why detection failed..."
+                    className="w-full p-2 rounded bg-[#ECEFCA] text-[#213448] h-24"
+                    value={devQuestion}
+                    onChange={(e) => setDevQuestion(e.target.value)}
+                  />
+                  <button
+                    onClick={askDevAssistant}
+                    disabled={loadingAnswer}
+                    className="mt-2 w-full bg-[#94B4C1] text-[#213448] py-2 rounded font-semibold"
+                  >
+                    {loadingAnswer ? "Thinking..." : "Ask"}
+                  </button>
+
+                  {devAnswer && (
+                    <div className="mt-4 bg-[#547792] p-4 rounded-lg border border-[#ECEFCA] text-sm whitespace-pre-wrap">
+                      {devAnswer}
+                    </div>
+                  )}
+                </div>
+              )}
             </aside>
 
           </>
