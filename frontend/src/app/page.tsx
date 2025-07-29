@@ -1,5 +1,6 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+
+import { useState, useEffect } from 'react';
 import "./globals.css";
 import { useAuth } from './hooks/useAuth';
 import { useRouter } from 'next/navigation';
@@ -17,6 +18,12 @@ import {
 } from 'chart.js';
 import Link from 'next/link';
 
+// Import new hooks
+import { useLLM } from './hooks/useLLM';
+import { useDetectionData } from './hooks/useDetection';
+import { useAnalytics } from './hooks/useAnalytics';
+import { useUploader } from './hooks/useUploader';
+
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -28,192 +35,57 @@ ChartJS.register(
   Legend
 );
 
-type Detection = {
-  plate_string: string;
-  plate_confidence: number;
-  plate_crop_path: string;
-  characters: {
-    box: number[];
-    class_id: number;
-    confidence: number;
-  }[];
-};
-
-type Result = {
-  id: number;
-  filename: string;
-  annotated_image: string;
-  detections?: Detection[];
-  timestamp?: string;
-};
-
 const charMap = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
 export default function Home() {
   const router = useRouter();
   const { token, isAuthenticated, logout } = useAuth();
 
-  const [files, setFiles] = useState<File[]>([]);
+  // Custom hooks
+  const {
+    history,
+    result,
+    totalResults,
+    searchTerm,
+    setSearchTerm,
+    currentPage,
+    setCurrentPage,
+    pageSize,
+    sortBy,
+    setSortBy,
+    order,
+    setOrder,
+    fetchFiltered,
+    fetchFullResult,
+    setHistory,
+    setResult,
+    deleteRecord
+  } = useDetectionData();
+
+  const { plateFrequency, setPlateFrequency, accuracyTrends, setAccuracyTrends } = useAnalytics();
+
+  const { files, setFiles, uploadFiles } = useUploader();
+
+  const { llmAnswer, devAnswer, loadingAnswer, askLLM, askDevAssistant } = useLLM();
+
   const [isSaved, setIsSaved] = useState(true);
-  const [result, setResult] = useState<Result | null>(null);
-  const [history, setHistory] = useState<Result[]>([]);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize] = useState(5);
-  const [totalResults, setTotalResults] = useState(0);
-  const [sortBy, setSortBy] = useState("timestamp");
-  const [order, setOrder] = useState("desc");
-  const [plateFrequency, setPlateFrequency] = useState<{ plate: string; count: number }[]>([]);
-  const [accuracyTrends, setAccuracyTrends] = useState<{ date: string; avg_confidence: number }[]>([]);
   const [llmQuestion, setLlmQuestion] = useState("");
-  const [llmAnswer, setLlmAnswer] = useState("");
   const [devQuestion, setDevQuestion] = useState("");
-  const [devAnswer, setDevAnswer] = useState<string | null>(null);
   const [devPanelOpen, setDevPanelOpen] = useState(false);
-  const [loadingAnswer, setLoadingAnswer] = useState(false);
 
-  // fetch paginated history
-  const fetchFiltered = useCallback(async () => {
-    const q = new URLSearchParams();
-    if (searchTerm) {
-      q.append("plate_query", searchTerm);
-      q.append("filename_query", searchTerm);
-    }
-    q.append("sort_by", sortBy);
-    q.append("order", order);
-    q.append("limit", pageSize.toString());
-    q.append("offset", ((currentPage - 1) * pageSize).toString());
-
-    try {
-      const res = await fetch(`http://192.168.50.143:8000/search?${q}`);
-      const data = await res.json();
-      setHistory(data.results);
-      setTotalResults(data.total);
-    } catch (err) {
-      console.error("History fetch failed:", err);
-    }
-  }, [searchTerm, currentPage, sortBy, order, pageSize]);
-
-  // fetch one record in full
-  const fetchFullResult = async (id: number) => {
-    try {
-      const res = await fetch(`http://192.168.50.143:8000/result/${id}`);
-      const full = await res.json();
-      setResult(full);
-    } catch (err) {
-      console.error("Failed to fetch full result:", err);
-    }
-  };
-
-  // upload files
-  const uploadFiles = async () => {
-    if (!files.length) return;
-    const fd = new FormData();
-    files.forEach((f) => fd.append("files", f));
-
-    try {
-      const res = await fetch("http://192.168.50.143:8000/upload", {
-        method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        body: fd,
-      });
-      if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
-      const uploaded = await res.json() as (Result & { saved: boolean })[];
-      setFiles([]);
-
-      if (isAuthenticated) {
-        // persisted path
-        await fetchFiltered();
-        try {
-         const [pfRes, atRes] = await Promise.all([
-           fetch("http://192.168.50.143:8000/plate-frequency"),
-           fetch("http://192.168.50.143:8000/detection-accuracy-trends"),
-         ]);
-         if (pfRes.ok) {
-           const pf = await pfRes.json();
-           setPlateFrequency(pf);
-         }
-         if (atRes.ok) {
-           const at = await atRes.json();
-           setAccuracyTrends(at);
-         }
-       } catch (e) {
-         console.error("Failed to refresh analytics:", e);
-       }
-        const newest = uploaded[uploaded.length - 1];
-        if (newest) {
-          const match = history.find((h) => h.filename === newest.filename);
-          if (match) fetchFullResult(match.id);
-        }
-        setIsSaved(true);
-      } else {
-        // ephemeral path
-        const items = uploaded.map((r, i) => ({
-          id: Date.now() + i,
-          filename: r.filename,
-          annotated_image: r.annotated_image,
-          detections: r.detections,
-          timestamp: r.timestamp,
-        }));
-        setHistory((prev) => [...items, ...prev]);
-        setResult(items[items.length - 1]);
-        setIsSaved(false);
-      }
-    } catch (err) {
-      console.error("Upload failed:", err);
-      alert(`Upload failed: ${err}`);
-    }
-
-
-  };
-
-  // delete record
-  const deleteRecord = async (id: number) => {
-    if (!confirm("Are you sure you want to delete this upload?")) return;
-    try {
-      const res = await fetch(`http://192.168.50.143:8000/delete/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
-      setHistory((prev) => prev.filter((r) => r.id !== id));
-      if (result?.id === id) setResult(null);
-      if (isAuthenticated) await fetchFiltered();
-    } catch (err) {
-      console.error("Delete failed:", err);
-      alert("Failed to delete. Try again.");
-    }
-  };
-
-  // effects
+  // Fetch history when logged in
   useEffect(() => {
     if (isAuthenticated) {
       fetchFiltered();
     }
   }, [isAuthenticated, fetchFiltered]);
 
-  useEffect(() => {
-    fetch("http://192.168.50.143:8000/plate-frequency")
-      .then((r) => r.json())
-      .then(setPlateFrequency)
-      .catch(console.error);
-  }, []);
-
-  useEffect(() => {
-    fetch("http://192.168.50.143:8000/detection-accuracy-trends")
-      .then((r) => r.json())
-      .then(setAccuracyTrends)
-      .catch(console.error);
-  }, []);
-
+  // Charts
   const chartData = {
     labels: plateFrequency.map((i) => i.plate),
     datasets: [{ label: "Frequency", data: plateFrequency.map((i) => i.count), backgroundColor: "#94B4C1" }],
   };
-  const chartOptions = {
-    responsive: true,
-    plugins: {
-      legend: { display: false },
-      title: { display: true, text: "Plate Frequency Chart" },
-    },
-  };
+  const chartOptions = { responsive: true, plugins: { legend: { display: false }, title: { display: true, text: "Plate Frequency Chart" } } };
 
   const trendData = {
     labels: accuracyTrends.map((t) => t.date),
@@ -226,50 +98,8 @@ export default function Home() {
       fill: true,
     }],
   };
-  const trendOptions = {
-    responsive: true,
-    plugins: {
-      legend: { display: true },
-      title: { display: true, text: "Detection Accuracy Trends" },
-    },
-  };
+  const trendOptions = { responsive: true, plugins: { legend: { display: true }, title: { display: true, text: "Detection Accuracy Trends" } } };
 
-  const askLLM = async () => {
-    try {
-      const res = await fetch("http://192.168.50.143:8000/llm-query", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: llmQuestion }),
-      });
-      const data = await res.json();
-      setLlmAnswer(data.answer);
-    } catch (err) {
-      console.error("Failed to query LLM:", err);
-      setLlmAnswer("❌ Failed to get a response.");
-    }
-  };
-
-  const askDevAssistant = async () => {
-    if (!devQuestion.trim()) return;
-    setLoadingAnswer(true);
-    try {
-      const res = await fetch("http://192.168.50.143:8000/llm-query", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          question: devQuestion,
-          metadata: result // attach current detection result
-        }),
-      });
-      const data = await res.json();
-      setDevAnswer(data.answer);
-    } catch (err) {
-      console.error("Failed to query LLM:", err);
-      setDevAnswer("Error: Could not fetch answer.");
-    } finally {
-      setLoadingAnswer(false);
-    }
-  };
 
   return (
     <>
@@ -316,7 +146,7 @@ export default function Home() {
               )}
             </div>
             <button
-              onClick={uploadFiles}
+              onClick={() => uploadFiles(token, isAuthenticated, fetchFiltered, setPlateFrequency, setAccuracyTrends, history, fetchFullResult, setIsSaved, setHistory, setResult)}
               className="bg-[#ECEFCA] text-[#213448] px-4 py-2 rounded font-semibold text-sm"
             >
               Upload Image(s)
@@ -381,7 +211,7 @@ export default function Home() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          deleteRecord(h.id);
+                          deleteRecord(h.id, isAuthenticated);
                         }}
                         className="text-[#992222] hover:text-[#cc4444] cursor-pointer text-lg"
                         title="Delete"
@@ -458,7 +288,7 @@ export default function Home() {
                 <h3 className="text-lg font-semibold mb-2 text-[#94B4C1]">Detected Plates</h3>
                 {result.detections && result.detections.length > 0 ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {result.detections.map((d, idx) => (
+                    {result.detections.map((d: any, idx: number) => (
                       <div key={idx} className="bg-[#547792] p-3 rounded border border-[#ECEFCA] text-sm">
                         <img
                           src={`http://192.168.50.143:8000${d.plate_crop_path}`}
@@ -469,7 +299,7 @@ export default function Home() {
                         <p><strong>Confidence:</strong> {d.plate_confidence ? `${(d.plate_confidence * 100).toFixed(2)}%` : 'N/A'}</p>
                         <p>
                           <strong>Characters:</strong>{" "}
-                          {d.characters?.map(c => charMap[c.class_id] || "?").join('') || "N/A"}
+                          {d.characters?.map((c: any) => charMap[c.class_id] || "?").join('') || "N/A"}
                         </p>
                         <a
                           href={`http://192.168.50.143:8000${d.plate_crop_path}`}
@@ -527,7 +357,7 @@ export default function Home() {
                     placeholder="e.g. What plates were most common yesterday?"
                     className="flex-1 p-2 rounded bg-[#ECEFCA] text-[#213448]"
                   />
-                  <button onClick={askLLM} className="bg-[#ECEFCA] text-[#213448] px-4 py-2 rounded font-semibold text-sm">
+                  <button onClick={() => askLLM(llmQuestion)} className="bg-[#ECEFCA] text-[#213448] px-4 py-2 rounded font-semibold text-sm">
                     Ask
                   </button>
                 </div>
@@ -554,7 +384,7 @@ export default function Home() {
                     onChange={(e) => setDevQuestion(e.target.value)}
                   />
                   <button
-                    onClick={askDevAssistant}
+                    onClick={() => askDevAssistant(devQuestion, result)}
                     disabled={loadingAnswer}
                     className="mt-2 w-full bg-[#94B4C1] text-[#213448] py-2 rounded font-semibold"
                   >
