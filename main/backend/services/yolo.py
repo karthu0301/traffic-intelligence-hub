@@ -4,16 +4,14 @@ import os
 import uuid
 from pathlib import Path
 
-plate_model = YOLO("/Users/rajirajeev/Documents/Karthika/NUS/Y2/internship/LLM Integration/traffic-intelligence-hub/License Plate Detection v4/runs/detect/train/weights/best.pt")
-char_model = YOLO("/Users/rajirajeev/Documents/Karthika/NUS/Y2/internship/LLM Integration/traffic-intelligence-hub/License Plate Characters v5/weights.pt") 
+plate_model = YOLO("/Users/rajirajeev/Documents/Karthika/NUS/Y2/internship/LLM Integration/traffic-intelligence-hub/models/License Plate Detection v4/runs/detect/train/weights/best.pt")
+char_model = YOLO("/Users/rajirajeev/Documents/Karthika/NUS/Y2/internship/LLM Integration/traffic-intelligence-hub/models/License Plate Characters v5/weights.pt") 
 
 BASE_DIR   = Path(__file__).resolve().parent.parent   
 RESULTS_DIR = BASE_DIR / "runs" / "results"
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
 char_map = "0123456789ABCDEFGHJKLMNOPQRSTUVWXYZ"
-
-char_map = [char_model.names[i] for i in range(len(char_model.names))]
 
 def group_and_sort_characters(chars, row_thresh=0.15):
     if not chars:
@@ -45,7 +43,7 @@ def group_and_sort_characters(chars, row_thresh=0.15):
 
 
 def detect_plates_and_characters(image_path: str,
-                                  plate_conf_thresh=0.65,
+                                  plate_conf_thresh=0.5,
                                   char_conf_thresh=0.5):
     """
     Detects plates, crops them, detects characters, and returns annotated results.
@@ -104,12 +102,10 @@ def detect_plates_and_characters(image_path: str,
         # Group and sort characters
         sorted_chars = group_and_sort_characters(chars, row_thresh=0.15)
 
-        # Skip plates with too few characters
-        if len(sorted_chars) < 3:
-            continue
-
-        # Decode plate string
-        plate_string = "".join([char_map[c["class_id"]] for c in sorted_chars])
+        plate_string = (
+            "".join([char_map[c["class_id"]] for c in sorted_chars])
+            if sorted_chars else None
+        )
 
         # Annotate characters on the resized crop
         for char in sorted_chars:
@@ -129,7 +125,7 @@ def detect_plates_and_characters(image_path: str,
             "plate_box": [x1, y1, x2, y2],
             "plate_crop_path": f"/static/results/{crop_filename}",
             "annotated_crop_path": f"/static/results/{annotated_crop_filename}",
-            "plate_string": plate_string,
+            "plate_string": plate_string or "UNKNOWN",
             "plate_confidence": plate_confidence,
             "characters": sorted_chars
         })

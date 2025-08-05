@@ -11,6 +11,8 @@ export function useAuth() {
     setLoading(false);
   }, []);
 
+  console.log("Token from useAuth:", token);
+
   const logout = () => {
     localStorage.removeItem('token');
     setToken(null);

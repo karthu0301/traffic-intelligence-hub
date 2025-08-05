@@ -16,17 +16,22 @@ export function useUploader(baseUrl: string = "http://192.168.50.143:8000") {
     setIsSaved: (saved: boolean) => void,
     setHistory: (data: any[]) => void,
     setResult: (data: any) => void,
-    refreshAnalytics: () => void, // for charts
-    refreshReports: () => void // NEW for analytics reports
+    refreshAnalytics: () => void, 
+    refreshReports: () => void 
   ) => {
     if (!files.length) return;
     const fd = new FormData();
     files.forEach((f) => fd.append("files", f));
 
     try {
+      const headers: HeadersInit = {};
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+      console.log("Token used:", token);
       const res = await fetch(`${baseUrl}/upload`, {
         method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        headers,
         body: fd,
       });
       if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
@@ -56,7 +61,8 @@ export function useUploader(baseUrl: string = "http://192.168.50.143:8000") {
           timestamp: r.timestamp,
         }));
         setHistory([...items, ...history]);
-        setResult(items[items.length - 1]);
+        const firstWithImage = items.find((r) => r.annotated_image) || items[items.length - 1];
+        setResult(firstWithImage);
         setIsSaved(false);
       }
     } catch (err) {

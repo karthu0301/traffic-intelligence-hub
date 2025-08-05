@@ -11,7 +11,7 @@ from models import DetectionRecord, PlateInfo, CharacterBox, User
 from services.yolo import detect_plates_and_characters
 from services.save import save_detection_to_db
 from auth.utils import get_current_user_optional
-from services.llm import query_llm
+from services.llm import run_llm_task
 
 router = APIRouter()
 UPLOAD_DIR = "../data/"
@@ -118,8 +118,9 @@ def get_full_result(detection_id: int = Path(...)):
 
         return JSONResponse({
             "filename": record.filename,
-            "timestamp": record.timestamp,
+            "timestamp": record.timestamp.isoformat() if record.timestamp else None,
             "annotated_image": record.annotated_image,
+            "annotated_crop_path": p.annotated_crop_path,
             "detections": detections
         })
 
@@ -194,8 +195,11 @@ def detection_accuracy_trends():
 
         trends = defaultdict(list)
         for plate, record in records:
-            day = record.timestamp.split("T")[0]
-            trends[day].append(plate.plate_confidence)
+            ts = record.timestamp
+            if isinstance(ts, str):
+                ts = datetime.fromisoformat(ts)
+            key = ts.strftime("%Y-%m-%d")
+            trends[key].append(plate.plate_confidence)
 
         return JSONResponse(content=[
             {"date": date, "avg_confidence": round(sum(confs) / len(confs), 4)}
@@ -212,8 +216,8 @@ async def ask_question(req: Request):
         # Convert to dicts
         records = [d.model_dump() for d in detections]
 
-    answer = query_llm(question, records)
-    return {"answer": answer}
+    task = run_llm_task.apply_async(args=[question, {"detections": records}])
+    return {"task_id": task.id, "message": "LLM processing started"}
 
 @router.post("/feedback/{upload_id}")
 def save_feedback(upload_id: int, feedback: str, session: Session = Depends(get_session)):

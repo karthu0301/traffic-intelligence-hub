@@ -37,8 +37,9 @@ def save_detection_to_db(session: Session,
         plate_record = PlateInfo(
             detection_id=detection.id,
             plate_crop_path=plate["plate_crop_path"],
-            plate_string=plate["plate_string", " "],
-            plate_confidence=plate["plate_confidence", 0.0]
+            annotated_crop_path=plate["annotated_crop_path"],
+            plate_string=plate.get("plate_string") or "UNKNOWN",
+            plate_confidence=plate.get("plate_confidence", 0.0)
         )
         session.add(plate_record)
 

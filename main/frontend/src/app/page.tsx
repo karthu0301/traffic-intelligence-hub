@@ -41,8 +41,6 @@ const charMap = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 export default function Home() {
   const router = useRouter();
   const { token, isAuthenticated, logout } = useAuth();
-
-  // Custom hooks
   const {
     history,
     result,
@@ -62,24 +60,12 @@ export default function Home() {
     setResult,
     deleteRecord,
   } = useDetectionData();
-
-
   const { files, setFiles, uploadFiles } = useUploader();
-
   const { llmAnswer, devAnswer, loadingAnswer, askLLM, askDevAssistant } = useLLM();
-
   const [isSaved, setIsSaved] = useState(true);
   const [llmQuestion, setLlmQuestion] = useState("");
   const [devQuestion, setDevQuestion] = useState("");
   const [devPanelOpen, setDevPanelOpen] = useState(false);
-
-  // Fetch history when logged in
-  useEffect(() => {
-    if (isAuthenticated) {
-      fetchFiltered();
-    }
-  }, [isAuthenticated, fetchFiltered]);
-
   const [reportRange, setReportRange] = useState<"daily" | "weekly" | "monthly" | "yearly">("daily");
   const {
   plateFrequency,
@@ -88,17 +74,57 @@ export default function Home() {
   setAccuracyTrends,
   refresh: refreshAnalytics
 } = useAnalytics(reportRange);
-
-
+const { report: analyticsReport, trends, loading: reportLoading, refresh: refreshReports } = useReports(reportRange, true);
   // Charts
   const chartData = {
-    labels: plateFrequency.map((i) => i.plate),
+    labels: plateFrequency.map((i) => String(i.plate)),
     datasets: [{ label: "Frequency", data: plateFrequency.map((i) => i.count), backgroundColor: "#94B4C1" }],
   };
-  const chartOptions = { responsive: true, plugins: { legend: { display: false }, title: { display: true, text: "Plate Frequency Chart" } } };
+  
+  const chartOptions = {
+    responsive: true,
+    plugins: {
+      legend: { display: false },
+      title: {
+        display: true,
+        text: "Plate Frequency Chart"
+      },
+      tooltip: {
+        callbacks: {
+          label(context: import("chart.js").TooltipItem<"line">): string {
+            return `Avg Confidence: ${context.parsed.y.toFixed(2)}`;
+          }
+        }
+      }
+    },
+    scales: {
+      x: {
+        ticks: {
+          callback: function(value: string | number): string {
+            const label = String(value);
+            return label.length > 8 ? label.slice(0, 6) + "…" : label;
+          },
+          maxRotation: 45,
+          minRotation: 0
+        }
+      },
+      y: {
+        title: {
+          display: true,
+          text: 'Count'
+        },
+        beginAtZero: true
+      }
+    }
+  };
 
-  const trendData = {
-    labels: accuracyTrends.map((t) => t.date),
+
+  const trendData = trends?.daily_counts
+  ? {
+    labels: trends.daily_counts.map((d: any) => {
+      const date = new Date(d.date);
+      return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    }),
     datasets: [{
       label: "Avg Detection Confidence",
       data: accuracyTrends.map((t) => t.avg_confidence),
@@ -106,18 +132,59 @@ export default function Home() {
       backgroundColor: "rgba(148, 180, 193, 0.2)",
       tension: 0.3,
       fill: true,
-    }],
+    }]
+    }
+  : {
+      labels: [],
+      datasets: []
+    };
+  
+  const trendOptions = {
+    responsive: true,
+    plugins: {
+      legend: { display: true },
+      title: {
+        display: true,
+        text: "Detection Accuracy Trends"
+      },
+      tooltip: {
+        callbacks: {
+          label: function(context: import("chart.js").TooltipItem<"line">) {
+            return `Avg Confidence: ${context.parsed.y.toFixed(2)}`;
+          }
+        }
+      }
+    },
+    scales: {
+      x: {
+        title: {
+          display: true,
+          text: 'Date'
+        }
+      },
+      y: {
+        title: {
+          display: true,
+          text: 'Avg Confidence'
+        },
+        beginAtZero: true,
+        max: 1
+      }
+    }
   };
-  const trendOptions = { responsive: true, plugins: { legend: { display: true }, title: { display: true, text: "Detection Accuracy Trends" } } };
 
-  const { report: analyticsReport, trends, loading: reportLoading, refresh: refreshReports } = useReports(reportRange, true);
+    useEffect(() => {
+    if (isAuthenticated) {
+      fetchFiltered();
+    }
+  }, [isAuthenticated, fetchFiltered]);
 
 
   return (
     <>
       {/* Header at the top */}
       <header className="w-full bg-[#547792] text-white px-6 py-4 flex items-center justify-between sticky top-0 z-50 shadow-md">
-        <h1 className="text-2xl font-bold">🚗 Traffic Intelligence Hub</h1>
+        <h1 className="text-2xl font-bold">Traffic Intelligence Hub</h1>
         {isAuthenticated ? (
           <button
             onClick={() => {
@@ -207,7 +274,14 @@ export default function Home() {
                     <li
                       key={idx}
                       className="flex items-center space-x-2 bg-[#94B4C1] p-2 rounded cursor-pointer"
-                      onClick={() => fetchFullResult(h.id)}
+                      onClick={() => {
+                        if (isAuthenticated) {
+                          fetchFullResult(h.id);
+                        } else {
+                          setResult(h);
+                          setIsSaved(false);
+                        }
+                      }}
                     >
                       <img
                         src={`http://192.168.50.143:8000${h.annotated_image}`}
@@ -274,7 +348,7 @@ export default function Home() {
         <section className="md:w-2/4 p-6 overflow-y-auto">
           {result ? (
             <>
-              <h2 className="text-xl font-semibold mb-2 text-[#ECEFCA]">✅ Detection Results</h2>
+              <h2 className="text-xl font-semibold mb-2 text-[#ECEFCA]">Detection Results</h2>
               <p className="text-sm text-gray-300 mb-4">{result.filename}</p>
               {!isSaved && (
                 <p className="text-yellow-300 text-sm mb-4">
@@ -298,7 +372,7 @@ export default function Home() {
               </div>
               <div>
                 <h3 className="text-lg font-semibold mb-2 text-[#94B4C1]">Detected Plates</h3>
-                {result.detections && result.detections.length > 0 ? (
+                {result.detections?.filter((d) => d.plate_crop_path).length > 0 ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {result.detections.map((d: any, idx: number) => (
                       <div key={idx} className="bg-[#547792] p-3 rounded border border-[#ECEFCA] text-sm">
@@ -307,7 +381,7 @@ export default function Home() {
                           alt={`Plate ${idx}`}
                           className="w-full mb-2 border rounded"
                         />
-                        <p><strong>Plate:</strong> {d.plate_string || 'N/A'}</p>
+                        <p><strong>Plate:</strong> {d.plate_string ? d.plate_string : "N/A"}</p>
                         <p><strong>Confidence:</strong> {d.plate_confidence ? `${(d.plate_confidence * 100).toFixed(2)}%` : 'N/A'}</p>
                         <p>
                           <strong>Characters:</strong>{" "}

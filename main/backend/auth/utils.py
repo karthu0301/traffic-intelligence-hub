@@ -20,7 +20,7 @@ def create_access_token(data: dict, expires_delta: timedelta = timedelta(hours=1
     expire = datetime.utcnow() + expires_delta
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
+    
 def get_current_user_optional(token: Optional[str] = Depends(oauth2_scheme)) -> Optional[User]:
     # no Authorization header → anonymous
     if not token:

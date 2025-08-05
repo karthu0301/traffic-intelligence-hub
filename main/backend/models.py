@@ -30,6 +30,7 @@ class PlateInfo(SQLModel, table=True):
     detection_id: int = Field(foreign_key="detectionrecord.id")
     detection: "DetectionRecord" = Relationship(back_populates="plates")
     plate_crop_path: str
+    annotated_crop_path: Optional[str] = None
     plate_string: str
     plate_confidence: float
 
@@ -37,6 +38,7 @@ class PlateInfo(SQLModel, table=True):
 class CharacterBox(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     detection_id: int = Field(foreign_key="detectionrecord.id")
+    detection: Optional["DetectionRecord"] = Relationship(back_populates="characters")
     class_id: int
     confidence: float
     x1: int

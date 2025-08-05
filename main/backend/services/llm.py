@@ -1,10 +1,10 @@
 import redis
 from ollama import Client
-from backend.celery_worker import celery_app
+from celery_worker import celery_app
 
 from sqlmodel import Session, select
-from backend.db import engine
-from backend.models import DetectionRecord, PlateInfo
+from db import engine
+from models import DetectionRecord, PlateInfo
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 from typing import Literal

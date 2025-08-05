@@ -37,7 +37,7 @@ export default function LoginPage() {
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="p-2 rounded text-[#213448]"
+            className="p-2 rounded bg-[#94B4C1]"
             placeholder="Enter your email"
           />
           <button

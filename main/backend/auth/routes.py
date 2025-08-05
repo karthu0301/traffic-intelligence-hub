@@ -73,3 +73,4 @@ async def verify_token(request: Request):
         return {"email": email}
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
+    

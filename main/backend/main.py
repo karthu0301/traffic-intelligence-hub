@@ -24,7 +24,7 @@ RUNS_DIR = BASE_DIR / "runs"
 app.mount("/static", StaticFiles(directory=str(RUNS_DIR)), name="static")
 
 app.include_router(auth_router)
-app.include_router(detection_router, prefix="/", tags=["Detection"])
+app.include_router(detection_router, tags=["Detection"])
 app.include_router(llm.router, prefix="/llm", tags=["LLM"])
 app.include_router(analytics.router, prefix="/analytics", tags=["Analytics"])
 
