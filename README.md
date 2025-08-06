@@ -1,4 +1,4 @@
-# 🚗 Traffic Intelligence Hub
+# Traffic Intelligence Hub
 
 A smart traffic analytics platform using YOLOv11 for license plate detection and OpenAI GPT for conversational insights.
 
