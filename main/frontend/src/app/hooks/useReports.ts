@@ -32,11 +32,49 @@ export function useReports(
     fetchReport(range, rich);
   }, [range, rich, fetchReport]);
 
+  const getStructuredReport = () => {
+    return report
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => {
+        const [left, right] = line.split(' -> ');
+        const [date, filename] = left.split(' - ');
+        const plates = right?.split(',').map((p) => p.trim()) || [];
+        return { date, filename, plates };
+      });
+  };
+
+  const exportCSV = () => {
+    const structured = getStructuredReport();
+
+    const csvRows = [
+      ['Date', 'Filename', 'Detected Plates'],
+      ...structured.map(({ date, filename, plates }) => [
+        date,
+        filename,
+        plates.join(' ')
+      ])
+    ];
+
+    const csvContent = csvRows.map(row => row.join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `analytics-report-${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return {
     report,
-    trends, 
+    trends,
     loading,
     error,
     refresh: fetchReport,
+    getStructuredReport,
+    exportCSV
   };
 }

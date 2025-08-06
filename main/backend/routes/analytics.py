@@ -37,11 +37,13 @@ def get_report(
         # Extra analytics: plate frequency and accuracy trends
         with Session(engine) as session:
             plates = session.exec(select(PlateInfo.plate_string)).all()
-            counter = Counter(plates)
-            response["plate_frequency"] = [
-                {"plate": plate, "count": count} for plate, count in counter.items()
-            ]
-
+            valid_plates = [p for p in plates if p and p.strip()]
+            counter = Counter(valid_plates)
+            response["plate_frequency"] = sorted(
+                [{"plate": plate, "count": count} for plate, count in counter.items()],
+                key=lambda x: x["count"],
+                reverse=True
+            )
             # Accuracy trends
             records = session.exec(
                 select(PlateInfo, DetectionRecord)
