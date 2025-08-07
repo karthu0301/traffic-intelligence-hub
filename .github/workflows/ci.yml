@@ -34,21 +34,19 @@ jobs:
 
   test-frontend:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        # point this at the folder where your package.json lives
-        working-directory: .
     steps:
-      - name: Check out code
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-      - name: Set up Node.js
+      - name: Setup Node
         uses: actions/setup-node@v3
         with:
-          node-version: "18"
+          node-version: 18
 
-      - name: Install npm dependencies
-        run: npm ci
+      - name: Install Playwright & deps
+        run: |
+          npm ci
+          npx playwright install
 
-      - name: Run frontend tests
-        run: npm test -- --watchAll=false
+      - name: Run Playwright tests
+        run: npx playwright test test/frontend/src/app/pages/test_home.spec.ts --reporter=list
+
