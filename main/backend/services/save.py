@@ -1,5 +1,5 @@
 from sqlmodel import Session
-from models import DetectionRecord, PlateInfo, CharacterBox
+from main.backend.models import DetectionRecord, PlateInfo, CharacterBox
 from datetime import datetime
 
 def save_detection_to_db(session: Session,
@@ -34,12 +34,15 @@ def save_detection_to_db(session: Session,
     session.refresh(detection)
 
     for plate in result["detections"]:
+        plate_conf = plate.get("plate_confidence")
+        if plate_conf is None:
+            plate_conf = 0.0
         plate_record = PlateInfo(
             detection_id=detection.id,
             plate_crop_path=plate["plate_crop_path"],
             annotated_crop_path=plate["annotated_crop_path"],
             plate_string=plate.get("plate_string") or "UNKNOWN",
-            plate_confidence=plate.get("plate_confidence", 0.0)
+            plate_confidence=plate_conf
         )
         session.add(plate_record)
 

@@ -1,12 +1,11 @@
-from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi import APIRouter, HTTPException, Depends, Request, Header
 from fastapi.responses import JSONResponse
 from jose import JWTError, jwt
-from auth.utils import SECRET_KEY, ALGORITHM
+from .utils import SECRET_KEY, ALGORITHM, create_access_token
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
-from db import get_session
-from models import User
-from auth.utils import create_access_token
+from main.backend.db import get_session
+from main.backend.models import User
 from sqlmodel import select
 from datetime import timedelta
 import sendgrid
@@ -74,3 +73,27 @@ async def verify_token(request: Request):
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
     
+
+@router.get("/me")
+async def read_me(
+    authorization: str | None = Header(None),
+    db: Session = Depends(get_session),
+):
+    if not authorization or not authorization.startswith("Bearer "):
+        return JSONResponse({"user": None})
+
+    token = authorization.split(" ", 1)[1]
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email = payload.get("sub")
+        if not email:
+            raise JWTError("missing sub")
+
+        user = db.exec(select(User).where(User.email == email)).first()
+        if user:
+            return {"email": user.email}
+        # no such user
+        return JSONResponse({"user": None})
+
+    except JWTError:
+        return JSONResponse({"user": None}, status_code=401)

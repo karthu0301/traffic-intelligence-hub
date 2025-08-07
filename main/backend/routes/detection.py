@@ -6,12 +6,12 @@ from typing import List, Optional
 from collections import defaultdict, Counter
 import shutil, os, tempfile, zipfile
 
-from db import engine, get_session
-from models import DetectionRecord, PlateInfo, CharacterBox, User
-from services.yolo import detect_plates_and_characters
-from services.save import save_detection_to_db
-from auth.utils import get_current_user_optional
-from services.llm import run_llm_task
+from main.backend.db import engine, get_session
+from main.backend.models import DetectionRecord, PlateInfo, CharacterBox, User
+from main.backend.services.yolo import detect_plates_and_characters
+from main.backend.services.save import save_detection_to_db
+from main.backend.auth.utils import get_current_user_optional
+from main.backend.services.llm import run_llm_task
 
 router = APIRouter()
 UPLOAD_DIR = "../data/"
@@ -31,18 +31,18 @@ async def upload(files: List[UploadFile] = File(...), user: Optional[User] = Dep
             shutil.copyfileobj(file.file, buffer)
 
         result = detect_plates_and_characters(file_path)
-
-        static_annotated = to_static_path(result["annotated_image"])
-        result["annotated_image"] = static_annotated
-        result["annotated_image_path"] = static_annotated
-        for det in result["detections"]:
-            det["plate_crop_path"] = to_static_path(det["plate_crop_path"])
+        result["annotated_image_path"] = result["annotated_image"]
             
         if user:
             with Session(engine) as session:
                 record = save_detection_to_db(session, file.filename, result, user_id=user.id)
         else:
             record = None
+
+        static_annotated = to_static_path(result["annotated_image"])
+        result["annotated_image"] = static_annotated
+        for det in result["detections"]:
+            det["plate_crop_path"] = to_static_path(det["plate_crop_path"])
 
         results.append({
             "filename": file.filename,
@@ -120,7 +120,6 @@ def get_full_result(detection_id: int = Path(...)):
             "filename": record.filename,
             "timestamp": record.timestamp.isoformat() if record.timestamp else None,
             "annotated_image": record.annotated_image,
-            "annotated_crop_path": p.annotated_crop_path,
             "detections": detections
         })
 
@@ -211,20 +210,24 @@ async def ask_question(req: Request):
     body = await req.json()
     question = body.get("question")
 
-    with get_session() as session:
-        detections = session.exec(select(DetectionRecord)).all()
-        # Convert to dicts
-        records = [d.model_dump() for d in detections]
+    session = next(get_session())  
+    detections = session.exec(select(DetectionRecord)).all()
+    records = [d.model_dump() for d in detections]
+    session.close()
 
     task = run_llm_task.apply_async(args=[question, {"detections": records}])
     return {"task_id": task.id, "message": "LLM processing started"}
 
 @router.post("/feedback/{upload_id}")
 def save_feedback(upload_id: int, feedback: str, session: Session = Depends(get_session)):
-    upload = session.get(UploadFile, upload_id)
+    print("Looking for DetectionRecord id:", upload_id)
+    upload = session.get(DetectionRecord, upload_id)
+    print("Got upload:", upload)
     if not upload:
+        print("NOT FOUND!!!")
         return {"error": "Not found"}
     upload.feedback = feedback
     session.add(upload)
     session.commit()
+    print("FEEDBACK SAVED")
     return {"status": "saved"}

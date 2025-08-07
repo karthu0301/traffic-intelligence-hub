@@ -1,10 +1,10 @@
 import redis
 from ollama import Client
-from celery_worker import celery_app
+from main.backend.celery_worker import celery_app
 
 from sqlmodel import Session, select
-from db import engine
-from models import DetectionRecord, PlateInfo
+from main.backend.db import engine
+from main.backend.models import DetectionRecord, PlateInfo
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 from typing import Literal
@@ -106,9 +106,6 @@ def _summarize_records(records, session: Session) -> str:
     return "\n".join(lines) if lines else "No detections for this period."
 
 def generate_trend_summary(range: Literal["daily", "weekly", "monthly", "yearly"]):
-    """
-    Return extra analytics: top plates and daily detection counts.
-    """
     now = datetime.utcnow()
     if range == "weekly":
         start_date = now - timedelta(days=7)

@@ -3,10 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlmodel import SQLModel
 from pathlib import Path
-from db import engine
-from auth.routes import router as auth_router
-from routes.detection import router as detection_router
-from routes import llm, analytics
+from main.backend.db import engine
+from main.backend.auth.routes import router as auth_router
+from main.backend.routes.detection import router as detection_router
+from main.backend.routes import llm, analytics
 
 app = FastAPI()
 

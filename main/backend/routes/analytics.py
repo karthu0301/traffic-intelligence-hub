@@ -1,15 +1,15 @@
 from collections import Counter, defaultdict
 from fastapi import APIRouter, Query
-from services.llm import (
+from main.backend.services.llm import (
     generate_daily_summary,
     generate_weekly_summary,
     generate_monthly_summary,
     generate_yearly_summary,
     generate_trend_summary,
 )
-from models import PlateInfo, DetectionRecord
+from main.backend.models import PlateInfo, DetectionRecord
 from sqlmodel import Session, select
-from db import engine
+from main.backend.db import engine
 
 router = APIRouter()
 

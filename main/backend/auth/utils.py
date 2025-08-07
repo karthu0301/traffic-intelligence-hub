@@ -4,8 +4,8 @@ from jose import jwt, JWTError
 from datetime import datetime, timedelta
 from typing import Optional
 from sqlmodel import Session, select
-from db import engine
-from models import User
+from main.backend.db import engine
+from main.backend.models import User
 from dotenv import load_dotenv
 import os
 

@@ -45,9 +45,6 @@ def group_and_sort_characters(chars, row_thresh=0.15):
 def detect_plates_and_characters(image_path: str,
                                   plate_conf_thresh=0.5,
                                   char_conf_thresh=0.5):
-    """
-    Detects plates, crops them, detects characters, and returns annotated results.
-    """
     result_id = uuid.uuid4().hex[:8]
     plate_results = plate_model(image_path)[0]
     orig_image = plate_results.orig_img

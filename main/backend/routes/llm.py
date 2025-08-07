@@ -3,8 +3,8 @@ from fastapi.responses import StreamingResponse
 from celery.result import AsyncResult
 import redis
 
-from celery_worker import celery_app
-from services.llm import run_llm_task
+from main.backend.celery_worker import celery_app
+from main.backend.services.llm import run_llm_task
 
 router = APIRouter()
 r = redis.Redis(host="localhost", port=6379, db=0)

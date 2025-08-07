@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import 'chartjs-adapter-date-fns';
 import "./globals.css";
 import { useAuth } from './hooks/useAuth';
 import { useRouter } from 'next/navigation';
@@ -9,6 +10,7 @@ import {
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
+  TimeScale,
   PointElement,
   LineElement,
   Title,
@@ -19,7 +21,6 @@ import {
 } from 'chart.js';
 import Link from 'next/link';
 
-// Import new hooks
 import { useLLM } from './hooks/useLLM';
 import { useDetectionData } from './hooks/useDetection';
 import { useAnalytics } from './hooks/useAnalytics';
@@ -29,6 +30,7 @@ import { useReports } from './hooks/useReports';
 ChartJS.register(
   CategoryScale,
   LinearScale,
+  TimeScale,
   PointElement,
   LineElement,
   BarElement,
@@ -61,11 +63,9 @@ export default function Home() {
     setResult,
     deleteRecord,
   } = useDetectionData();
-    const { llmAnswer, devAnswer, loadingAnswer, askLLM, askDevAssistant } = useLLM();
+    const { llmAnswer, askLLM } = useLLM();
     const [isSaved, setIsSaved] = useState(true);
     const [llmQuestion, setLlmQuestion] = useState("");
-    const [devQuestion, setDevQuestion] = useState("");
-    const [devPanelOpen, setDevPanelOpen] = useState(false);
     const [reportRange, setReportRange] = useState<"daily" | "weekly" | "monthly" | "yearly">("daily");
     const { chartData, chartOptions, trendData, trendOptions,plateFrequency, setPlateFrequency, accuracyTrends, setAccuracyTrends, refresh: refreshAnalytics } = useAnalytics(reportRange)
     const { report: analyticsReport, trends, loading: reportLoading, refresh: refreshReports, getStructuredReport, exportCSV } = useReports(reportRange, true);
@@ -397,39 +397,6 @@ return (
                 </div>
               )}
             </div>
-
-            {/* Dev assistant toggle */}
-            <button
-              onClick={() => setDevPanelOpen((prev) => !prev)}
-              className="fixed bottom-4 right-4 bg-blue-500 hover:bg-blue-400 text-gray-100 px-4 py-2 rounded-lg font-bold shadow-lg transition-colors duration-200 z-50"
-            >
-              {devPanelOpen ? 'Close Assistant' : 'Open Assistant'}
-            </button>
-
-            {devPanelOpen && (
-              <div className="md:w-1/4 bg-slate-800 p-6 border-l border-blue-500 shadow-lg transition-colors duration-200">
-                <h3 className="text-lg font-semibold mb-4 text-blue-500">🛠 Developer Assistant</h3>
-                <textarea
-                  placeholder="Ask why detection failed..."
-                  className="w-full p-2 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 h-24 transition-colors duration-200"
-                  value={devQuestion}
-                  onChange={(e) => setDevQuestion(e.target.value)}
-                />
-                <button
-                  onClick={() => askDevAssistant(devQuestion, result)}
-                  disabled={loadingAnswer}
-                  className="mt-2 w-full bg-blue-500 hover:bg-blue-400 text-gray-100 py-2 rounded-lg font-semibold transition-colors duration-200"
-                >
-                  {loadingAnswer ? "Thinking..." : "Ask"}
-                </button>
-
-                {devAnswer && (
-                  <div className="mt-4 bg-slate-800 p-4 rounded-lg border border-blue-500 shadow-lg text-sm whitespace-pre-wrap transition-colors duration-200">
-                    <p className="text-gray-100">{devAnswer}</p>
-                  </div>
-                )}
-              </div>
-            )}
           </aside>
         )}
       </main>
