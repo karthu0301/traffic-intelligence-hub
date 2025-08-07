@@ -10,26 +10,45 @@ jobs:
   test-backend:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: Check out code
+        uses: actions/checkout@v3
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: "3.11"
-      - name: Install dependencies
+
+      - name: Install Python dependencies
         run: |
-          pip install pytest fastapi[all] sqlmodel passlib
+          python -m pip install --upgrade pip
+          # core framework
+          pip install fastapi[all] uvicorn sqlmodel passlib
+          # Auth and JWT
+          pip install "python-jose[cryptography]"
+          # testing
+          pip install pytest pytest-asyncio anyio httpx
+
       - name: Run backend tests
-        run: PYTHONPATH=main pytest -q --disable-warnings
+        run: |
+          PYTHONPATH=main pytest -q --disable-warnings
 
   test-frontend:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: main/frontend
+        # point this at the folder where your package.json lives
+        working-directory: .
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
         with:
           node-version: "18"
-      - run: npm ci
-      - run: npm test -- --watchAll=false
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Run frontend tests
+        run: npm test -- --watchAll=false
