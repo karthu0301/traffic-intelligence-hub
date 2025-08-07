@@ -49,7 +49,6 @@ def test_save_detection_basic(session):
         confidence_threshold=0.8
     )
 
-    # Check detection saved
     db_detection = session.get(DetectionRecord, detection.id)
     assert db_detection is not None
     assert db_detection.filename == "test.jpg"
@@ -57,13 +56,11 @@ def test_save_detection_basic(session):
     assert db_detection.model_version == "v1.0"
     assert db_detection.confidence_threshold == 0.8
 
-    # Check plate info
     plates = session.exec(select(PlateInfo).where(PlateInfo.detection_id == detection.id)).all()
     assert len(plates) == 1
     assert plates[0].plate_string == "ABC123"
     assert plates[0].plate_confidence == 0.91
 
-    # Check character box
     chars = session.exec(select(CharacterBox).where(CharacterBox.detection_id == detection.id)).all()
     assert len(chars) == 1
     assert chars[0].class_id == 1
@@ -86,7 +83,6 @@ def test_save_detection_no_characters(session):
 
     detection = save_detection_to_db(session, "empty.jpg", result)
 
-    # Plate string should default to "UNKNOWN"
     plates = session.exec(select(PlateInfo).where(PlateInfo.detection_id == detection.id)).all()
     assert plates[0].plate_string == "UNKNOWN"
     assert plates[0].plate_confidence == 0.0

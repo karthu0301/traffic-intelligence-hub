@@ -17,7 +17,7 @@ def test_group_and_sort_characters_multiple_rows():
         {"box": [12, 30, 22, 40], "class_id": 2, "confidence": 0.8} 
     ]
     sorted_chars = group_and_sort_characters(chars)
-    assert len(sorted_chars) == 2  # both characters remain
+    assert len(sorted_chars) == 2  
     assert sorted_chars[0]["box"][1] < sorted_chars[1]["box"][1] 
 
 @patch("main.backend.services.yolo.plate_model")
@@ -25,11 +25,9 @@ def test_group_and_sort_characters_multiple_rows():
 @patch("main.backend.services.yolo.cv2.imwrite")
 @patch("main.backend.services.yolo.cv2.resize")
 def test_detect_plates_and_characters(mock_resize, mock_imwrite, mock_char_model, mock_plate_model):
-    # Fake original image
     fake_image = MagicMock()
-    fake_image.__getitem__.return_value = MagicMock(size=1)  # Non-empty crop
+    fake_image.__getitem__.return_value = MagicMock(size=1)  
 
-    # Plate detection mock
     mock_plate_result = MagicMock()
     mock_plate_result.orig_img = fake_image
     fake_plate_box = MagicMock()
@@ -40,7 +38,6 @@ def test_detect_plates_and_characters(mock_resize, mock_imwrite, mock_char_model
     mock_plate_result.save = MagicMock()
     mock_plate_model.return_value = [mock_plate_result]
 
-    # Character detection mock
     mock_char_result = MagicMock()
     fake_char_box = MagicMock()
     fake_char_box.tolist.return_value = [5, 5, 15, 15]
@@ -48,8 +45,6 @@ def test_detect_plates_and_characters(mock_resize, mock_imwrite, mock_char_model
     mock_char_result.boxes.cls = [1]
     mock_char_result.boxes.conf = [0.95]
     mock_char_model.return_value = [mock_char_result]
-
-    # Make resize return a real numpy image so OpenCV works
     mock_resize.return_value = np.zeros((640, 640, 3), dtype=np.uint8)
 
     result = detect_plates_and_characters("dummy.jpg")
