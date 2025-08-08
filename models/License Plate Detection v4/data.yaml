@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 1
+names: ['LicensePlate']
+
+roboflow:
+  workspace: license-plate-detection-nqshh
+  project: license-plate-detection-zqr4z
+  version: 4
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/license-plate-detection-nqshh/license-plate-detection-zqr4z/dataset/4

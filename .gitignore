@@ -11,3 +11,4 @@ node_modules/
 # Output
 runs/
 data/
+.env

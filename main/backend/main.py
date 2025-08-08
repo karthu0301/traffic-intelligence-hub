@@ -1,0 +1,31 @@
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from sqlmodel import SQLModel
+from pathlib import Path
+from main.backend.db import engine
+from main.backend.auth.routes import router as auth_router
+from main.backend.routes.detection import router as detection_router
+from main.backend.routes import llm, analytics
+
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://192.168.50.143:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+BASE_DIR = Path(__file__).resolve().parent
+RUNS_DIR = BASE_DIR / "runs"
+
+app.mount("/static", StaticFiles(directory=str(RUNS_DIR)), name="static")
+
+app.include_router(auth_router)
+app.include_router(detection_router, tags=["Detection"])
+app.include_router(llm.router, prefix="/llm", tags=["LLM"])
+app.include_router(analytics.router, prefix="/analytics", tags=["Analytics"])
+
+SQLModel.metadata.create_all(engine)
